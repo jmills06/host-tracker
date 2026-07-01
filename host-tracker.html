@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Everyday Ham - Host Tracker</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@300;400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<style>
+  /* ============================================================
+     THE EVERYDAY HAM - HOST TRACKER
+     Portrait digital signage: 1080 wide x 1920 tall (DakBoard)
+     Non-interactive, display only.
+     ============================================================ */
+
+  :root {
+    --navy:        #152333;
+    --navy-dark:   #0d1620;
+    --navy-light:  #1e3347;
+    --orange:      #ff7030;
+    --cream:       #fdf8e5;
+    --cream-80:    rgba(253, 248, 229, 0.80);
+    --cream-50:    rgba(253, 248, 229, 0.50);
+    --cream-30:    rgba(253, 248, 229, 0.30);
+    --good:        #2ecc71;
+    --warn:        #f39c12;
+    --bad:         #e74c3c;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 1080px;
+    height: 1920px;
+    overflow: hidden;
+    background: var(--navy-dark);
+    color: var(--cream);
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+
+  #stage {
+    width: 1080px;
+    height: 1920px;
+    display: flex;
+    flex-direction: column;
+    background:
+      radial-gradient(1200px 700px at 12% -8%, rgba(255,112,48,0.10), transparent 60%),
+      radial-gradient(1000px 700px at 100% 108%, rgba(255,112,48,0.08), transparent 60%),
+      linear-gradient(160deg, var(--navy-light) 0%, var(--navy) 42%, var(--navy-dark) 100%);
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    flex: 0 0 auto;
+    padding: 34px 40px 22px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+  .brand .kicker {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    letter-spacing: 6px;
+    font-size: 22px;
+    color: var(--orange);
+    text-transform: uppercase;
+  }
+  .brand .title {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 300;
+    font-size: 58px;
+    line-height: 1;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+  .brand .title b { font-weight: 600; }
+  .clock { text-align: right; }
+  .clock .zulu {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 500;
+    font-size: 46px;
+    line-height: 1;
+    letter-spacing: 2px;
+  }
+  .clock .zulu .z {
+    color: var(--orange);
+    font-size: 26px;
+    vertical-align: 6px;
+    margin-left: 4px;
+  }
+  .clock .local {
+    font-size: 20px;
+    color: var(--cream-50);
+    letter-spacing: 1px;
+    margin-top: 6px;
+    text-transform: uppercase;
+  }
+
+  .rule {
+    height: 2px;
+    margin: 0 40px;
+    background: linear-gradient(90deg, var(--orange) 0%, rgba(255,112,48,0.35) 30%, rgba(255,112,48,0) 88%);
+  }
+
+  /* ---------- Map region ---------- */
+  #mapwrap {
+    position: relative;
+    flex: 1 1 auto;
+    margin: 22px 40px 18px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  }
+  #map { position: absolute; inset: 0; background: var(--navy-dark); }
+  /* Static tint on the tiles to pull the basemap toward the brand navy.
+     Static only - never animated (GPU/animation hygiene). */
+  #map .leaflet-tile-pane {
+    filter: saturate(0.55) brightness(0.72) hue-rotate(178deg) contrast(1.05);
+  }
+  #map .leaflet-container { background: var(--navy-dark); }
+
+  /* Navy vignette so markers and trails read against the map edges. */
+  #mapwrap::after {
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 120px 30px rgba(13,22,32,0.85);
+    background:
+      radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(13,22,32,0.55) 100%);
+  }
+
+  #trails, #avatars {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  #trails { z-index: 400; }
+  #avatars { z-index: 401; }
+
+  /* ---------- Host markers ---------- */
+  .host-marker {
+    position: absolute;
+    left: 0; top: 0;
+    width: 0; height: 0;
+    will-change: transform;
+  }
+  .host-marker .center {
+    position: absolute;
+    left: 0; top: 0;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .host-ring {
+    position: absolute;
+    left: 50%; top: 0;
+    width: 64px; height: 64px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 2px solid var(--hc);
+    opacity: 0.0;
+  }
+  .host-marker.rolling .host-ring,
+  .host-marker.fresh .host-ring {
+    opacity: 0.55;
+    animation: ringpulse 1.8s ease-out infinite;
+  }
+  @keyframes ringpulse {
+    0%   { transform: translate(-50%,-50%) scale(0.65); opacity: 0.6; }
+    70%  { opacity: 0.0; }
+    100% { transform: translate(-50%,-50%) scale(1.5); opacity: 0.0; }
+  }
+  .host-beam {
+    position: absolute;
+    left: 50%; top: 0;
+    width: 0; height: 0;
+    transform: translate(-50%, -50%) rotate(var(--course, 0deg));
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+  .host-beam::before {
+    content: "";
+    position: absolute;
+    left: -9px; top: -46px;
+    width: 0; height: 0;
+    border-left: 9px solid transparent;
+    border-right: 9px solid transparent;
+    border-bottom: 18px solid var(--hc);
+    filter: drop-shadow(0 0 6px var(--hc));
+  }
+  .host-marker.rolling .host-beam { opacity: 0.95; }
+
+  .host-body {
+    position: relative;
+    z-index: 2;
+    will-change: transform;
+  }
+  .host-marker.rolling .host-body { animation: bob 0.85s ease-in-out infinite; }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-4px); }
+  }
+  .host-avatar {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: var(--hc);
+    background-size: cover;
+    background-position: center;
+    border: 3px solid var(--cream);
+    box-shadow: 0 0 14px rgba(0,0,0,0.55), 0 0 18px var(--hc);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 20px;
+    color: var(--navy-dark);
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+  }
+  .host-avatar img.pose { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .host-avatar:not(.imgloaded) img.pose { display: none; }
+  .host-avatar.imgloaded .ini { display: none; }
+  .host-marker.dim .host-avatar {
+    filter: grayscale(0.7);
+    opacity: 0.55;
+    box-shadow: none;
+  }
+  .host-tag {
+    margin-top: 5px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 1px;
+    color: var(--cream);
+    background: rgba(13,22,32,0.72);
+    border: 1px solid var(--hc);
+    padding: 1px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+
+  /* ---------- Map overlays: legend + mode badge ---------- */
+  .map-legend {
+    position: absolute;
+    left: 16px; top: 16px;
+    z-index: 402;
+    background: rgba(13,22,32,0.78);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 12px 14px;
+    backdrop-filter: blur(6px);
+  }
+  .map-legend .lh {
+    font-family: 'Oswald', sans-serif;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-bottom: 8px;
+  }
+  .legend-row {
+    display: flex; align-items: center; gap: 9px;
+    margin: 5px 0;
+  }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px var(--d); background: var(--d); }
+  .legend-name { font-family: 'Oswald', sans-serif; font-weight: 500; font-size: 16px; letter-spacing: 0.5px; }
+  .legend-call { font-size: 12px; color: var(--cream-50); letter-spacing: 0.5px; }
+
+  .mode-badge {
+    position: absolute;
+    right: 16px; top: 16px;
+    z-index: 402;
+    display: flex; align-items: center; gap: 9px;
+    background: rgba(13,22,32,0.80);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 999px;
+    padding: 8px 16px 8px 12px;
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: 2px;
+    font-size: 16px;
+    text-transform: uppercase;
+    backdrop-filter: blur(6px);
+  }
+  .mode-badge .mdot {
+    width: 11px; height: 11px; border-radius: 50%;
+    background: var(--good);
+    box-shadow: 0 0 10px var(--good);
+  }
+  .mode-badge.replay .mdot { background: var(--orange); box-shadow: 0 0 10px var(--orange); }
+  .mode-badge.live .mdot { animation: livepulse 1.6s ease-in-out infinite; }
+  @keyframes livepulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .mode-badge .sub { font-size: 12px; color: var(--cream-50); letter-spacing: 1px; }
+
+  /* Replay scrubber */
+  .replay-bar {
+    position: absolute;
+    left: 16px; right: 16px; bottom: 14px;
+    z-index: 402;
+    height: 4px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.12);
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+  .replay-bar.show { opacity: 1; }
+  .replay-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, rgba(255,112,48,0.4), var(--orange));
+    box-shadow: 0 0 10px var(--orange);
+  }
+
+  /* ---------- Bottom status cards ---------- */
+  #cards {
+    flex: 0 0 auto;
+    padding: 0 40px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 62px 1fr auto;
+    align-items: center;
+    gap: 18px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-left: 6px solid var(--hc);
+    border-radius: 14px;
+    padding: 16px 22px 16px 20px;
+  }
+  .card .avatar {
+    width: 54px; height: 54px;
+    border-radius: 50%;
+    background: var(--hc);
+    background-size: cover; background-position: center;
+    border: 3px solid var(--cream);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 21px;
+    color: var(--navy-dark);
+    box-shadow: 0 0 14px var(--hc);
+    position: relative;
+    overflow: hidden;
+  }
+  .card .avatar img.pose { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .card .avatar:not(.imgloaded) img.pose { display: none; }
+  .card .avatar.imgloaded .ini { display: none; }
+  .card.notheard .avatar { filter: grayscale(0.8); opacity: 0.5; box-shadow: none; }
+  .card .who { min-width: 0; }
+  .card .call {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 30px;
+    letter-spacing: 1px;
+    line-height: 1;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .freshdot {
+    width: 11px; height: 11px; border-radius: 50%;
+    background: var(--orange);
+    box-shadow: 0 0 10px var(--orange);
+    opacity: 0;
+  }
+  .card.fresh .freshdot { opacity: 1; animation: livepulse 1.4s ease-in-out infinite; }
+  .card .name { font-size: 18px; color: var(--cream-80); margin-top: 5px; letter-spacing: 0.3px; }
+  .card .heard { font-size: 15px; color: var(--cream-50); margin-top: 3px; letter-spacing: 0.3px; text-transform: uppercase; }
+
+  .card .metrics {
+    display: flex;
+    gap: 26px;
+    align-items: center;
+    text-align: right;
+  }
+  .metric .val {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 300;
+    font-size: 34px;
+    line-height: 1;
+  }
+  .metric .val small { font-size: 16px; color: var(--cream-50); font-weight: 400; margin-left: 3px; }
+  .metric .lbl {
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--cream-50);
+    margin-top: 6px;
+  }
+  .state-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 500;
+    font-size: 16px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+  }
+  .state-pill .sd { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+  .state-ROLLING { color: var(--good); }
+  .state-PARKED  { color: var(--warn); }
+  .state-HOME    { color: var(--orange); }
+  .state-NOTHEARD{ color: var(--cream-50); }
+
+  /* ---------- Footer ---------- */
+  footer {
+    flex: 0 0 auto;
+    padding: 8px 40px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 15px;
+    color: var(--cream-50);
+    letter-spacing: 0.4px;
+  }
+  footer .src { display: flex; align-items: center; gap: 10px; }
+  .stale-badge {
+    display: none;
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-size: 13px;
+    color: var(--bad);
+    border: 1px solid var(--bad);
+    border-radius: 6px;
+    padding: 3px 9px;
+  }
+  .stale-badge.show { display: inline-block; }
+
+  .leaflet-control-attribution {
+    background: rgba(13,22,32,0.6) !important;
+    color: var(--cream-50) !important;
+    font-size: 10px !important;
+  }
+  .leaflet-control-attribution a { color: var(--cream-80) !important; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <header>
+    <div class="brand">
+      <div class="kicker">The Everyday Ham</div>
+      <div class="title">Host <b>Tracker</b></div>
+    </div>
+    <div class="clock">
+      <div class="zulu" id="zulu">--:--:--<span class="z">Z</span></div>
+      <div class="local" id="local">--</div>
+    </div>
+  </header>
+
+  <div class="rule"></div>
+
+  <div id="mapwrap">
+    <div id="map"></div>
+    <canvas id="trails"></canvas>
+    <div id="avatars"></div>
+
+    <div class="map-legend" id="legend">
+      <div class="lh">On the air</div>
+    </div>
+
+    <div class="mode-badge live" id="modeBadge">
+      <span class="mdot"></span>
+      <span id="modeText">Live</span>
+    </div>
+
+    <div class="replay-bar" id="replayBar"><div class="replay-fill" id="replayFill"></div></div>
+  </div>
+
+  <div id="cards"></div>
+
+  <footer>
+    <div class="src">
+      <span id="srcText">Simulated data</span>
+      <span class="stale-badge" id="staleBadge">Stale</span>
+    </div>
+    <div id="updated">Last update --</div>
+  </footer>
+
+</div>
+
+<script>
+/* ============================================================
+   CONFIG  -  tune everything here
+   ============================================================ */
+
+// Where the poller writes the snapshot. If the fetch fails (or the file
+// does not exist yet) the board runs on built-in simulated tracks.
+const DATA_URL       = 'host-tracker.json';
+const FORCE_SIMULATED = false;   // set true to always use the demo data
+
+// Home base of the show. Distances on the cards are measured from here.
+const CLARKSTON = { lat: 42.7356, lng: -83.4183 };
+
+// Roster.  Replace the example callsigns (N0CALL patterns) with your real
+// ones and drop in custom avatar art via `icon` (any square image URL).
+// `color` is optional; leave it out to auto-assign from the mode palette.
+const HOSTS = [
+  { call: 'K8JKU', name: 'James', color: '#ff7030', initials: 'JA',
+    home: { lat: 42.7356, lng: -83.4183 },                          // Clarkston
+    poses: { home: 'icons/james-home.png', portable: 'icons/james-portable.png', mobile: 'icons/james-mobile.png' } },
+
+  { call: 'W8XYZ', name: 'Jim', color: '#4a90e2', initials: 'JI',   // EXAMPLE call - replace with Jim's real callsign
+    home: { lat: 42.6931, lng: -83.4083 },                          // Waterford
+    poses: { home: 'icons/jim-home.png', portable: 'icons/jim-portable.png', mobile: 'icons/jim-mobile.png' } },
+
+  { call: 'K8ABC', name: 'Rory', color: '#9b59b6', initials: 'RO',  // EXAMPLE call - replace with Rory's real callsign
+    home: { lat: 42.7847, lng: -83.2394 },                          // Lake Orion
+    poses: { home: 'icons/rory-home.png', portable: 'icons/rory-portable.png', mobile: 'icons/rory-mobile.png' } },
+];
+
+// Timing / behaviour
+const MASTER_TICK_MS   = 1000;   // single master tick for clock, ages, mode
+const POLL_SECONDS     = 120;    // how often to re-fetch the snapshot
+const TRAIL_HOURS      = 24;     // length of the breadcrumb trail
+const LIVE_SECONDS     = 40;     // time spent in LIVE before a REPLAY sweep
+const REPLAY_SECONDS   = 16;     // duration of one 24h time-lapse sweep
+const FRESH_MINUTES    = 10;     // "just heard" window -> pulse + fresh dot
+const STALE_MINUTES    = 45;     // no beacon this long -> NOT HEARD
+const DATA_STALE_MIN   = 20;     // snapshot older than this -> footer stale badge
+
+// Classification
+const MOVING_SPEED_KMH = 8;      // above this a station is ROLLING
+const HOME_RADIUS_KM   = 0.4;    // within this of `home` -> HOME (else PARKED)
+
+// Display units
+const KM_TO_MI = 0.621371;
+
+// Trail look
+const TRAIL_WIDTH   = 3.5;
+const GLOW_WIDTH    = 11;
+const NIGHT_DIM     = 0.5;       // multiplier for points logged overnight
+const DAY_START_HR  = 7;
+const DAY_END_HR    = 20;
+
+const MODE_PALETTE = ['#ff7030', '#4a90e2', '#9b59b6', '#2ecc71'];
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let map, trailCanvas, ctx, avatarLayer;
+let hosts = [];              // enriched roster + tracks
+let dataGeneratedMs = 0;     // when the current snapshot was produced
+let sourceLabel = 'Simulated data';
+let lastSignature = '';
+let ripples = [];            // active fresh-beacon ripples
+let tickCount = 0;
+
+// LIVE / REPLAY scheduler
+let mode = 'LIVE';
+let modeElapsed = 0;         // seconds spent in current mode (fractional)
+let lastFrameMs = performance.now();
+
+/* ============================================================
+   GEO HELPERS
+   ============================================================ */
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const la1 = a.lat * Math.PI / 180, la2 = b.lat * Math.PI / 180;
+  const h = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+function bearingDeg(a, b) {
+  const y = Math.sin((b.lng-a.lng)*Math.PI/180) * Math.cos(b.lat*Math.PI/180);
+  const x = Math.cos(a.lat*Math.PI/180)*Math.sin(b.lat*Math.PI/180) -
+            Math.sin(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.cos((b.lng-a.lng)*Math.PI/180);
+  return (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
+}
+function compass(deg) {
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round(deg/45) % 8];
+}
+
+/* ============================================================
+   SIMULATED DATA
+   Builds believable 24h tracks so the board runs before the
+   poller exists.  Deterministic: same tracks on every load.
+   ============================================================ */
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Position schedules: [minuteFromStart, lat, lng]. Between keyframes we
+// interpolate; identical consecutive points read as parked.
+const SIM_SCHEDULES = {
+  'K8JKU': [   // ends mid-drive -> currently ROLLING
+    [0,   42.7356,-83.4183],[600, 42.7356,-83.4183],
+    [660, 42.7942,-83.6247],[780, 42.7942,-83.6247],   // Holly POTA
+    [840, 42.8517,-83.4430],[960, 42.8517,-83.4430],   // Ortonville POTA
+    [1080,42.7356,-83.4183],[1380,42.7356,-83.4183],
+    [1440,42.7610,-83.3200]                             // rolling toward Lake Orion
+  ],
+  'W8XYZ': [   // commute out and back -> currently HOME/PARKED
+    [0,   42.6931,-83.4083],[420, 42.6931,-83.4083],
+    [510, 43.0125,-83.6875],[960, 43.0125,-83.6875],   // Flint (work)
+    [1050,42.6931,-83.4083],[1440,42.6931,-83.4083]
+  ],
+  'K8ABC': [   // homebody with one short hop -> currently HOME
+    [0,   42.7847,-83.2394],[720, 42.7847,-83.2394],
+    [750, 42.6389,-83.2910],[810, 42.6389,-83.2910],   // Pontiac
+    [840, 42.7847,-83.2394],[1440,42.7847,-83.2394]
+  ]
+};
+
+function sampleSchedule(sched, minute) {
+  if (minute <= sched[0][0]) return { lat: sched[0][1], lng: sched[0][2] };
+  const last = sched[sched.length-1];
+  if (minute >= last[0]) return { lat: last[1], lng: last[2] };
+  for (let i = 0; i < sched.length-1; i++) {
+    const a = sched[i], b = sched[i+1];
+    if (minute >= a[0] && minute <= b[0]) {
+      const f = (minute - a[0]) / (b[0] - a[0]);
+      return { lat: a[1] + (b[1]-a[1])*f, lng: a[2] + (b[2]-a[2])*f };
+    }
+  }
+  return { lat: last[1], lng: last[2] };
+}
+
+function buildSimulated() {
+  const now = Date.now();
+  const stepMin = 4;                       // one beacon every 4 minutes
+  const roster = HOSTS.map((h, hi) => {
+    const rand = mulberry32(0x9E37 + hi*7919);
+    const sched = SIM_SCHEDULES[h.call] || [[0,h.home.lat,h.home.lng],[1440,h.home.lat,h.home.lng]];
+    const track = [];
+    let prev = null;
+    for (let m = 0; m <= 1440; m += stepMin) {
+      const p = sampleSchedule(sched, m);
+      // small jitter so drive legs look organic, near-zero when parked
+      const moving = prev && haversineKm(prev, p) > 0.02;
+      const jitter = moving ? 0.0016 : 0.00025;
+      const lat = p.lat + (rand()-0.5)*jitter;
+      const lng = p.lng + (rand()-0.5)*jitter;
+      const time = now - (1440 - m)*60000;
+      let speed = 0, course = 0;
+      if (prev) {
+        const distKm = haversineKm(prev, { lat, lng });
+        speed = distKm / (stepMin/60);     // km/h over the step
+        if (distKm > 0.03) course = bearingDeg(prev, { lat, lng });
+        else course = prev.course || 0;
+      }
+      const pt = { time, lat, lng, speed, course };
+      track.push(pt);
+      prev = pt;
+    }
+    return { call: h.call, name: h.name, color: h.color, icon: h.icon,
+             initials: h.initials, home: h.home, track };
+  });
+  return { generated: now, source: 'Simulated data', hosts: roster };
+}
+
+/* ============================================================
+   DATA LOADING
+   Expected snapshot schema (what the poller writes):
+   {
+     "generated": "2026-07-01T18:00:00Z",   // ISO8601 UTC
+     "hosts": [
+       { "callsign": "K8JKU",
+         "track": [ { "time":"2026-07-01T17:56:00Z",
+                      "lat":42.73, "lng":-83.41,
+                      "speed":0, "course":0 } ]   // speed km/h, course deg
+       }
+     ]
+   }
+   Roster metadata (name/color/icon/home) comes from HOSTS above; the
+   snapshot only needs callsign + track, so the backend stays simple.
+   ============================================================ */
+function parseTime(t) {
+  if (typeof t === 'number') return t < 1e12 ? t*1000 : t;  // unix s or ms
+  let s = String(t);
+  if (!/[zZ]|[+\-]\d\d:?\d\d$/.test(s)) s += 'Z';            // assume UTC
+  return Date.parse(s);
+}
+
+async function loadData() {
+  if (FORCE_SIMULATED) return applyData(buildSimulated());
+  try {
+    const res = await fetch(DATA_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const raw = await res.json();
+    const genMs = parseTime(raw.generated || Date.now());
+    const cutoff = Date.now() - TRAIL_HOURS*3600*1000;
+    const roster = HOSTS.map(h => {
+      const rec = (raw.hosts || []).find(x => (x.callsign || x.call) === h.call);
+      const track = ((rec && rec.track) || [])
+        .map(p => ({ time: parseTime(p.time), lat: +p.lat, lng: +p.lng,
+                     speed: +p.speed || 0, course: +p.course || 0 }))
+        .filter(p => p.time >= cutoff)
+        .sort((a,b) => a.time - b.time);
+      return { call: h.call, name: h.name, color: h.color, icon: h.icon,
+               initials: h.initials, home: h.home, track };
+    });
+    applyData({ generated: genMs, source: 'Live via aprs.fi', hosts: roster });
+  } catch (e) {
+    // Graceful fallback: keep whatever is on screen, else show the demo.
+    if (!hosts.length) applyData(buildSimulated());
+    else { sourceLabel = 'Simulated data'; }
+  }
+}
+
+function applyData(data) {
+  // Signature guard: only rebuild the DOM when content actually changes.
+  const sig = data.hosts.map(h => {
+    const last = h.track[h.track.length-1];
+    return h.call + ':' + (last ? Math.round(last.time/1000)+','+h.track.length : '0');
+  }).join('|');
+
+  const colored = data.hosts.map((h, i) => ({
+    ...h, color: h.color || MODE_PALETTE[i % MODE_PALETTE.length]
+  }));
+
+  hosts = colored;
+  dataGeneratedMs = data.generated;
+  sourceLabel = data.source || sourceLabel;
+
+  if (sig !== lastSignature) {
+    buildLegend();
+    buildCards();
+    lastSignature = sig;
+  }
+}
+
+/* ============================================================
+   MAP + OVERLAYS
+   ============================================================ */
+function initMap() {
+  map = L.map('map', {
+    zoomControl: false, attributionControl: true,
+    dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+    boxZoom: false, keyboard: false, touchZoom: false, tap: false,
+    inertia: false, zoomSnap: 0.1
+  });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    subdomains: 'abcd', maxZoom: 19,
+    attribution: '&copy; OpenStreetMap &copy; CARTO'
+  }).addTo(map);
+
+  trailCanvas = document.getElementById('trails');
+  ctx = trailCanvas.getContext('2d');
+  avatarLayer = document.getElementById('avatars');
+
+  sizeCanvas();
+  window.addEventListener('resize', () => { sizeCanvas(); frameBounds(); });
+}
+
+function sizeCanvas() {
+  const w = document.getElementById('mapwrap').clientWidth;
+  const h = document.getElementById('mapwrap').clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  trailCanvas.width = w * dpr;
+  trailCanvas.height = h * dpr;
+  trailCanvas.style.width = w + 'px';
+  trailCanvas.style.height = h + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// Frame the map to include every point plus the home base, then lock it.
+function frameBounds() {
+  const pts = [];
+  hosts.forEach(h => h.track.forEach(p => pts.push([p.lat, p.lng])));
+  pts.push([CLARKSTON.lat, CLARKSTON.lng]);
+  if (!pts.length) { map.setView([CLARKSTON.lat, CLARKSTON.lng], 10); return; }
+  map.fitBounds(pts, { padding: [70, 70], animate: false });
+}
+
+/* ============================================================
+   LEGEND + CARDS (structure built on data change)
+   ============================================================ */
+function buildLegend() {
+  const el = document.getElementById('legend');
+  el.innerHTML = '<div class="lh">On the air</div>';
+  hosts.forEach(h => {
+    const row = document.createElement('div');
+    row.className = 'legend-row';
+    row.style.setProperty('--d', h.color);
+    row.innerHTML = `<span class="legend-dot"></span>
+      <span><span class="legend-name">${h.call}</span>
+      <span class="legend-call"> ${h.name}</span></span>`;
+    el.appendChild(row);
+  });
+}
+
+function buildCards() {
+  const wrap = document.getElementById('cards');
+  wrap.innerHTML = '';
+  hosts.forEach(h => {
+    const c = document.createElement('div');
+    c.className = 'card';
+    c.id = 'card-' + h.call;
+    c.style.setProperty('--hc', h.color);
+    c.innerHTML = `
+      <div class="avatar"><img class="pose" alt=""><span class="ini">${h.initials || ''}</span></div>
+      <div class="who">
+        <div class="call">${h.call}<span class="freshdot"></span></div>
+        <div class="name">${h.name}</div>
+        <div class="heard" data-heard>--</div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="state-pill" data-state><span class="sd"></span><span data-statetext>--</span></div></div>
+        <div class="metric"><div class="val" data-speed>--</div><div class="lbl">Speed</div></div>
+        <div class="metric"><div class="val" data-dist>--</div><div class="lbl">From home</div></div>
+        <div class="metric"><div class="val" data-miles>--</div><div class="lbl">Miles today</div></div>
+      </div>`;
+    wrap.appendChild(c);
+  });
+}
+
+/* ============================================================
+   POSE SELECTION
+   Maps a host state to a pose image, with graceful fallback so a
+   partial set (e.g. only home + mobile) still works. Legacy single
+   `icon` fields are treated as a home pose.
+   ============================================================ */
+function poseFor(host, state) {
+  const p = host.poses || (host.icon ? { home: host.icon } : null);
+  if (!p) return null;
+  const order = ({
+    ROLLING:  ['mobile', 'portable', 'home'],
+    PARKED:   ['portable', 'home', 'mobile'],
+    HOME:     ['home', 'portable', 'mobile'],
+    NOTHEARD: ['home', 'portable', 'mobile'],
+  })[state] || ['home', 'portable', 'mobile'];
+  for (const k of order) if (p[k]) return p[k];
+  for (const k in p) if (p[k]) return p[k];
+  return null;
+}
+
+// Swap an avatar's pose image only when it changes. The image reveals
+// itself on load and falls back to initials if the file is missing.
+function setPose(avatarEl, url) {
+  if (!avatarEl) return;
+  if (!url) { avatarEl.classList.remove('imgloaded'); avatarEl._pose = null; return; }
+  if (avatarEl._pose === url) return;
+  avatarEl._pose = url;
+  const img = avatarEl.querySelector('img.pose');
+  if (!img) return;
+  img.onload  = () => { if (avatarEl._pose === url) avatarEl.classList.add('imgloaded'); };
+  img.onerror = () => { if (avatarEl._pose === url) avatarEl.classList.remove('imgloaded'); };
+  img.src = url;
+}
+
+/* ============================================================
+   PER-HOST DERIVED STATE
+   ============================================================ */
+function deriveHost(h, atMs) {
+  const track = h.track;
+  if (!track.length) return { empty: true };
+
+  // position at time `atMs` (used by REPLAY); in LIVE atMs = now -> latest.
+  let idx = track.length - 1;
+  for (let i = 0; i < track.length; i++) { if (track[i].time > atMs) { idx = i-1; break; } }
+  if (idx < 0) idx = 0;
+
+  let pos;
+  if (idx >= track.length - 1) pos = { ...track[track.length-1] };
+  else {
+    const a = track[idx], b = track[idx+1];
+    const f = (atMs - a.time) / Math.max(1, (b.time - a.time));
+    pos = { lat: a.lat+(b.lat-a.lat)*f, lng: a.lng+(b.lng-a.lng)*f,
+            speed: b.speed, course: b.course, time: atMs };
+  }
+
+  const latest = track[track.length-1];
+  const ageMin = (Date.now() - latest.time) / 60000;
+  const distHome = haversineKm(latest, h.home) * KM_TO_MI;
+  const distBase = haversineKm(latest, CLARKSTON) * KM_TO_MI;
+
+  // miles logged across the trail
+  let miles = 0;
+  for (let i = 1; i < track.length; i++) miles += haversineKm(track[i-1], track[i]);
+  miles *= KM_TO_MI;
+
+  let state;
+  if (ageMin > STALE_MINUTES) state = 'NOTHEARD';
+  else if (latest.speed > MOVING_SPEED_KMH) state = 'ROLLING';
+  else if (haversineKm(latest, h.home) < HOME_RADIUS_KM) state = 'HOME';
+  else state = 'PARKED';
+
+  const fresh = ageMin <= FRESH_MINUTES;
+  return { empty: false, pos, latest, ageMin, distHome, distBase, miles, state, fresh };
+}
+
+function stateLabel(s) {
+  return s === 'NOTHEARD' ? 'Not heard' : s.charAt(0) + s.slice(1).toLowerCase();
+}
+function ageText(min) {
+  if (min < 1) return 'Heard just now';
+  if (min < 60) return 'Heard ' + Math.round(min) + ' min ago';
+  const hr = Math.floor(min/60), m = Math.round(min%60);
+  return 'Heard ' + hr + 'h ' + (m ? m + 'm ' : '') + 'ago';
+}
+
+/* ============================================================
+   RENDER LOOP (requestAnimationFrame) - drawing only.
+   Data, clock, ages and mode switching live on the master tick.
+   ============================================================ */
+function renderLoop(nowMs) {
+  const dt = (nowMs - lastFrameMs) / 1000;
+  lastFrameMs = nowMs;
+
+  // advance mode scheduler
+  modeElapsed += dt;
+  if (mode === 'LIVE' && modeElapsed >= LIVE_SECONDS) { mode = 'REPLAY'; modeElapsed = 0; }
+  else if (mode === 'REPLAY' && modeElapsed >= REPLAY_SECONDS) { mode = 'LIVE'; modeElapsed = 0; }
+
+  // atMs: LIVE tracks real now; REPLAY sweeps the last 24h
+  let atMs, replayFrac = 0;
+  const now = Date.now();
+  if (mode === 'LIVE') atMs = now;
+  else {
+    replayFrac = modeElapsed / REPLAY_SECONDS;
+    atMs = (now - TRAIL_HOURS*3600*1000) + replayFrac * TRAIL_HOURS*3600*1000;
+  }
+
+  drawTrails(atMs);
+  drawAvatars(atMs);
+  updateModeUI(replayFrac);
+
+  requestAnimationFrame(renderLoop);
+}
+
+function ll(p) { return map.latLngToContainerPoint([p.lat, p.lng]); }
+
+function nightFactor(ms) {
+  const hr = new Date(ms).getHours();   // display-local hour
+  return (hr >= DAY_START_HR && hr < DAY_END_HR) ? 1 : NIGHT_DIM;
+}
+
+function drawTrails(atMs) {
+  const w = trailCanvas.clientWidth, h = trailCanvas.clientHeight;
+  ctx.clearRect(0, 0, w, h);
+
+  hosts.forEach(host => {
+    const pts = host.track.filter(p => p.time <= atMs);
+    if (pts.length < 2) return;
+    const headTime = pts[pts.length-1].time;
+    const oldest = pts[0].time;
+    const span = Math.max(1, headTime - oldest);
+
+    // soft glow pass then bright core pass
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      for (let i = 1; i < pts.length; i++) {
+        const a = ll(pts[i-1]), b = ll(pts[i]);
+        const along = (pts[i].time - oldest) / span;          // 0 tail -> 1 head
+        const fade = Math.pow(along, 1.4);                    // bias brightness to head
+        const nf = nightFactor(pts[i].time);
+        const alpha = (pass === 0 ? 0.10 : 0.9) * fade * nf;
+        if (alpha < 0.015) continue;
+        ctx.strokeStyle = hexA(host.color, alpha);
+        ctx.lineWidth = pass === 0 ? GLOW_WIDTH : TRAIL_WIDTH;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    }
+    // glowing head
+    const head = ll(pts[pts.length-1]);
+    const pulse = 0.6 + 0.4*Math.sin(performance.now()/500);
+    ctx.beginPath();
+    ctx.fillStyle = hexA(host.color, 0.9);
+    ctx.shadowColor = host.color; ctx.shadowBlur = 16*pulse;
+    ctx.arc(head.x, head.y, 4.5, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+
+  drawRipples();
+}
+
+function spawnRipple(p, color) { ripples.push({ x: p.x, y: p.y, color, born: performance.now() }); }
+function drawRipples() {
+  const life = 1600;
+  const now = performance.now();
+  ripples = ripples.filter(r => now - r.born < life);
+  ripples.forEach(r => {
+    const t = (now - r.born) / life;
+    const radius = 6 + t*34;
+    ctx.beginPath();
+    ctx.strokeStyle = hexA(r.color, (1-t)*0.6);
+    ctx.lineWidth = 2;
+    ctx.arc(r.x, r.y, radius, 0, Math.PI*2); ctx.stroke();
+  });
+}
+
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+
+/* ---------- avatars ---------- */
+const markerEls = {};
+function drawAvatars(atMs) {
+  hosts.forEach(host => {
+    let el = markerEls[host.call];
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'host-marker';
+      el.style.setProperty('--hc', host.color);
+      el.innerHTML = `
+        <div class="center">
+          <div class="host-ring"></div>
+          <div class="host-beam"></div>
+          <div class="host-body"><div class="host-avatar"><img class="pose" alt=""><span class="ini">${host.initials || ''}</span></div></div>
+          <div class="host-tag">${host.call}</div>
+        </div>`;
+      avatarLayer.appendChild(el);
+      markerEls[host.call] = el;
+    }
+    const d = deriveHost(host, atMs);
+    if (d.empty) { el.style.display = 'none'; return; }
+    el.style.display = '';
+
+    const pt = ll(d.pos);
+    el.style.transform = `translate3d(${pt.x}px, ${pt.y}px, 0)`;
+    el.querySelector('.host-beam').style.setProperty('--course', (d.pos.course||0) + 'deg');
+
+    // pose reflects what the avatar is doing at this instant (so REPLAY
+    // shows driving on drive legs, home when parked at home, etc.)
+    const dispState = (d.state === 'NOTHEARD') ? 'NOTHEARD'
+      : (d.pos.speed > MOVING_SPEED_KMH ? 'ROLLING'
+         : (haversineKm(d.pos, host.home) < HOME_RADIUS_KM ? 'HOME' : 'PARKED'));
+    setPose(el.querySelector('.host-avatar'), poseFor(host, dispState));
+
+    const moving = d.pos.speed > MOVING_SPEED_KMH;
+    el.classList.toggle('rolling', moving);
+    el.classList.toggle('fresh', d.fresh && !moving);
+    el.classList.toggle('dim', d.state === 'NOTHEARD');
+
+    // fresh-beacon ripple in LIVE only
+    if (mode === 'LIVE' && d.fresh) {
+      if (!host._lastRipple || performance.now() - host._lastRipple > 2600) {
+        spawnRipple(pt, host.color); host._lastRipple = performance.now();
+      }
+    }
+  });
+}
+
+function updateModeUI(replayFrac) {
+  const badge = document.getElementById('modeBadge');
+  const bar = document.getElementById('replayBar');
+  if (mode === 'LIVE') {
+    badge.className = 'mode-badge live';
+    document.getElementById('modeText').textContent = 'Live';
+    bar.classList.remove('show');
+  } else {
+    badge.className = 'mode-badge replay';
+    document.getElementById('modeText').textContent = 'Replay';
+    bar.classList.add('show');
+    document.getElementById('replayFill').style.width = (replayFrac*100).toFixed(1) + '%';
+  }
+}
+
+/* ============================================================
+   MASTER TICK - clock, ages, card text, poll, stale badge
+   ============================================================ */
+function masterTick() {
+  tickCount++;
+
+  // clock
+  const now = new Date();
+  const u = now;
+  const zz = String(u.getUTCHours()).padStart(2,'0') + ':' +
+             String(u.getUTCMinutes()).padStart(2,'0') + ':' +
+             String(u.getUTCSeconds()).padStart(2,'0');
+  document.getElementById('zulu').innerHTML = zz + '<span class="z">Z</span>';
+  document.getElementById('local').textContent =
+    now.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }) + '  ' +
+    now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+
+  // card fields (LIVE-truth values, independent of replay sweep)
+  hosts.forEach(host => {
+    const card = document.getElementById('card-' + host.call);
+    if (!card) return;
+    const d = deriveHost(host, Date.now());
+    if (d.empty) return;
+    card.className = 'card' + (d.state==='NOTHEARD' ? ' notheard' : '') + (d.fresh ? ' fresh' : '');
+    card.style.setProperty('--hc', host.color);
+
+    const pill = card.querySelector('[data-state]');
+    pill.className = 'state-pill state-' + d.state;
+    card.querySelector('[data-statetext]').textContent = stateLabel(d.state);
+    card.querySelector('[data-heard]').textContent = ageText(d.ageMin);
+    setPose(card.querySelector('.avatar'), poseFor(host, d.state));
+
+    const mph = d.latest.speed * KM_TO_MI;
+    card.querySelector('[data-speed]').innerHTML = d.state==='ROLLING'
+      ? Math.round(mph) + '<small>mph ' + compass(d.latest.course) + '</small>'
+      : '0<small>mph</small>';
+    card.querySelector('[data-dist]').innerHTML = d.distBase.toFixed(1) + '<small>mi</small>';
+    card.querySelector('[data-miles]').innerHTML = d.miles.toFixed(1) + '<small>mi</small>';
+  });
+
+  // footer + stale badge
+  const ageMin = (Date.now() - dataGeneratedMs) / 60000;
+  document.getElementById('srcText').textContent = sourceLabel;
+  document.getElementById('updated').textContent =
+    'Last update ' + (ageMin < 1 ? 'just now' : Math.round(ageMin) + ' min ago');
+  document.getElementById('staleBadge').classList.toggle('show',
+    sourceLabel.startsWith('Live') && ageMin > DATA_STALE_MIN);
+
+  if (tickCount % POLL_SECONDS === 0) loadData();
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+async function boot() {
+  initMap();
+  await loadData();
+  frameBounds();
+  masterTick();
+  setInterval(masterTick, MASTER_TICK_MS);
+  requestAnimationFrame(renderLoop);
+}
+window.addEventListener('load', boot);
+</script>
+</body>
+</html>
