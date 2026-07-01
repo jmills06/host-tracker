@@ -35,8 +35,8 @@ MAX_POINTS  = 800       # hard cap per host (safety against runaway growth)
 # These MUST match the `call` values in the HTML HOSTS config.
 ROSTER = [
     "K8JKU-9",     # James  (replace SSID if needed)
-    "JIMCALL-9",   # Jim    <-- replace with Jim's real callsign-SSID
-    "RORYCALL-9",  # Rory   <-- replace with Rory's real callsign-SSID
+    "N8JRD-1",   # Jim    <-- replace with Jim's real callsign-SSID
+    "W8KNX-9",  # Rory   <-- replace with Rory's real callsign-SSID
 ]
 
 APRS_URL   = "https://api.aprs.fi/api/get"
