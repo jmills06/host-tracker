@@ -33,9 +33,10 @@ MAX_POINTS  = 800
 # id    = the key the board matches on (use the base callsign).
 # watch = the APRS SSIDs to follow and merge for that person (moving radios only).
 HOSTS = [
-    {"id": "K8JKU", "watch": ["K8JKU-9"]},                # James: mobile
-    {"id": "N8JRD", "watch": ["N8JRD-9", "N8JRD-7"]},     # Jim: mobile + HT (EDIT to his real moving SSIDs)
-    {"id": "W8KNX", "watch": ["W8KNX-9"]},                # Rory: mobile
+    {"id": "K8JKU", "watch": ["K8JKU-9", "K8JKU-3"]},                       # James
+    {"id": "N8JRD", "watch": ["N8JRD-1", "N8JRD-3", "N8JRD-7", "N8JRD-8",
+                              "N8JRD-9", "N8JRD-11", "N8JRD-14"]},           # Jim (dropped -4, -15 home stations)
+    {"id": "W8KNX", "watch": ["W8KNX-1", "W8KNX-3", "W8KNX-7", "W8KNX-9"]},  # Rory (dropped -B)
 ]
 
 APRS_URL   = "https://api.aprs.fi/api/get"
