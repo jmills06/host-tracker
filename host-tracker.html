@@ -509,12 +509,12 @@ const HOSTS = [
     home: { lat: 42.7356, lng: -83.4183 },                          // Clarkston
     poses: { home: 'icons/james-home.png', portable: 'icons/james-portable.png', mobile: 'icons/james-mobile.png' } },
 
-  { call: 'N8JRD', name: 'Jim', color: '#4a90e2', initials: 'JI',   // EXAMPLE call - replace with Jim's real callsign
-    home: { lat: 42.6931, lng: -83.4083 },                          // Waterford
+  { call: 'N8JRD', name: 'Jim', color: '#4a90e2', initials: 'JI',
+    home: { lat: 42.4606, lng: -83.6516 },                          // South Lyon
     poses: { home: 'icons/jim-home.png', portable: 'icons/jim-portable.png', mobile: 'icons/jim-mobile.png' } },
 
-  { call: 'W8KNX', name: 'Rory', color: '#9b59b6', initials: 'RO',  // EXAMPLE call - replace with Rory's real callsign
-    home: { lat: 42.7847, lng: -83.2394 },                          // Lake Orion
+  { call: 'W8KNX', name: 'Rory', color: '#9b59b6', initials: 'RO',
+    home: { lat: 42.4606, lng: -83.6516 },                          // South Lyon
     poses: { home: 'icons/rory-home.png', portable: 'icons/rory-portable.png', mobile: 'icons/rory-mobile.png' } },
 ];
 
@@ -606,12 +606,12 @@ const SIM_SCHEDULES = {
     [1080,42.7356,-83.4183],[1380,42.7356,-83.4183],
     [1440,42.7610,-83.3200]                             // rolling toward Lake Orion
   ],
-  'W8XYZ': [   // commute out and back -> currently HOME/PARKED
+  'N8JRD': [   // commute out and back -> currently HOME/PARKED
     [0,   42.6931,-83.4083],[420, 42.6931,-83.4083],
     [510, 43.0125,-83.6875],[960, 43.0125,-83.6875],   // Flint (work)
     [1050,42.6931,-83.4083],[1440,42.6931,-83.4083]
   ],
-  'K8ABC': [   // homebody with one short hop -> currently HOME
+  'W8KNX': [   // homebody with one short hop -> currently HOME
     [0,   42.7847,-83.2394],[720, 42.7847,-83.2394],
     [750, 42.6389,-83.2910],[810, 42.6389,-83.2910],   // Pontiac
     [840, 42.7847,-83.2394],[1440,42.7847,-83.2394]
