@@ -554,6 +554,15 @@ const MODE_PALETTE = ['#ff7030', '#4a90e2', '#9b59b6', '#2ecc71'];
 const MAP_TILES  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 const MAP_ATTRIB = '&copy; OpenStreetMap &copy; CARTO';
 
+// Auto-zoom: pick the tightest zoom that still fits everyone.
+const FIT_MODE         = 'people'; // 'people' = fit current positions (tightest).
+                                   // 'trails' = fit the whole 24h trails (nothing clips).
+const FIT_MAX_ZOOM     = 14;       // never zoom tighter than this (clustered/single host)
+const FIT_PADDING_PX   = 80;       // breathing room around the outermost person
+const FIT_INCLUDE_HOME = false;    // also keep Clarkston (home base) in frame
+const FIT_FALLBACK_ZOOM= 11;       // used when nobody has a position yet
+const AUTO_REFIT       = true;     // re-fit as people move or appear
+
 /* ============================================================
    STATE
    ============================================================ */
@@ -562,6 +571,7 @@ let hosts = [];              // enriched roster + tracks
 let dataGeneratedMs = 0;     // when the current snapshot was produced
 let sourceLabel = 'Simulated data';
 let lastSignature = '';
+let lastFitSig = '';
 let ripples = [];            // active fresh-beacon ripples
 let tickCount = 0;
 
@@ -748,6 +758,12 @@ function applyData(data) {
     buildCards();
     lastSignature = sig;
   }
+
+  // keep everyone in frame as they move, without re-fitting on every poll
+  if (AUTO_REFIT && map) {
+    const fsig = fitSignature();
+    if (fsig !== lastFitSig) { lastFitSig = fsig; frameBounds(); }
+  }
 }
 
 /* ============================================================
@@ -784,13 +800,49 @@ function sizeCanvas() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-// Frame the map to include every point plus the home base, then lock it.
-function frameBounds() {
+// Collect the points the frame should contain.
+function getFitPoints() {
   const pts = [];
-  hosts.forEach(h => h.track.forEach(p => pts.push([p.lat, p.lng])));
-  pts.push([CLARKSTON.lat, CLARKSTON.lng]);
-  if (!pts.length) { map.setView([CLARKSTON.lat, CLARKSTON.lng], 10); return; }
-  map.fitBounds(pts, { padding: [70, 70], animate: false });
+  hosts.forEach(h => {
+    if (!h.track || !h.track.length) return;
+    if (FIT_MODE === 'trails') {
+      h.track.forEach(p => pts.push([p.lat, p.lng]));
+    } else {
+      const last = h.track[h.track.length - 1];
+      pts.push([last.lat, last.lng]);
+    }
+  });
+  if (FIT_INCLUDE_HOME) pts.push([CLARKSTON.lat, CLARKSTON.lng]);
+  return pts;
+}
+
+// A cheap signature of current positions, so we only re-fit on real movement.
+function fitSignature() {
+  return hosts.map(h => {
+    const p = h.track && h.track.length ? h.track[h.track.length - 1] : null;
+    return h.call + (p ? ':' + p.lat.toFixed(3) + ',' + p.lng.toFixed(3) : ':-');
+  }).join('|') + '|' + FIT_MODE;
+}
+
+// Frame the map to the tightest zoom that still fits everyone.
+function frameBounds() {
+  const pts = getFitPoints();
+  if (!pts.length) {
+    map.setView([CLARKSTON.lat, CLARKSTON.lng], FIT_FALLBACK_ZOOM);
+    needsRedraw = true;
+    return;
+  }
+  const b = L.latLngBounds(pts);
+  if (b.getNorthEast().equals(b.getSouthWest())) {
+    // everyone at (effectively) one spot: center on it, clamp the zoom
+    map.setView(b.getCenter(), FIT_MAX_ZOOM, { animate: false });
+  } else {
+    map.fitBounds(b, {
+      padding: [FIT_PADDING_PX, FIT_PADDING_PX],
+      maxZoom: FIT_MAX_ZOOM,
+      animate: false
+    });
+  }
   needsRedraw = true;
 }
 
