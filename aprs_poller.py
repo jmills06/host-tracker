@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
-The Everyday Ham - Host Tracker poller.
+The Everyday Ham - Host Tracker poller  (multi-SSID, person-keyed).
 
-Queries the aprs.fi API for the host roster and maintains a rolling
-24-hour position log in host-tracker.json, which the DakBoard display reads.
+Each host can beacon from several APRS SSIDs (mobile -9, HT -7, and so on).
+This poller watches a curated list of SSIDs per person and merges them into
+ONE trail that follows the person, whichever radio they happened to use.
 
-aprs.fi only returns each station's *current* position, so this script is
-what grows the breadcrumb trail: every run it appends any new beacon and
-prunes anything older than the trail window.
+IMPORTANT: only list SSIDs that MOVE WITH THE PERSON (mobile, handheld).
+Do NOT list fixed stations (home digipeater / igate / weather). A fixed
+station beacons constantly from one spot and would pin the trail at home,
+hiding the person's actual movement.
 
-Env vars:
-  APRS_API_KEY  (required)  your aprs.fi API key  -> store as a repo secret
+Env:
+  APRS_API_KEY  (required)  your aprs.fi API key -> repo secret
   OUT_FILE      (optional)  output path, default host-tracker.json
 """
 
@@ -22,28 +24,25 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-# ------------------------------------------------------------------ config
-API_KEY   = os.environ.get("APRS_API_KEY", "").strip()
-OUT_FILE  = Path(os.environ.get("OUT_FILE", "host-tracker.json"))
+API_KEY  = os.environ.get("APRS_API_KEY", "").strip()
+OUT_FILE = Path(os.environ.get("OUT_FILE", "host-tracker.json"))
 
-TRAIL_HOURS = 24        # keep this many hours of trail
-MAX_POINTS  = 800       # hard cap per host (safety against runaway growth)
+TRAIL_HOURS = 24
+MAX_POINTS  = 800
 
-# Exact APRS identifiers to track, INCLUDING SSID.
-# People beacon per SSID: home = base call, mobile = -9, HT = -7, etc.
-# Pick the one you want to follow (usually the mobile -9 for a movement map).
-# These MUST match the `call` values in the HTML HOSTS config.
-ROSTER = [
-    "K8JKU-9",     # James  (replace SSID if needed)
-    "N8JRD-1",   # Jim    <-- replace with Jim's real callsign-SSID
-    "W8KNX-9",  # Rory   <-- replace with Rory's real callsign-SSID
+# id    = the key the board matches on (use the base callsign).
+# watch = the APRS SSIDs to follow and merge for that person (moving radios only).
+HOSTS = [
+    {"id": "K8JKU", "watch": ["K8JKU-9"]},                # James: mobile
+    {"id": "N8JRD", "watch": ["N8JRD-9", "N8JRD-7"]},     # Jim: mobile + HT (EDIT to his real moving SSIDs)
+    {"id": "W8KNX", "watch": ["W8KNX-9"]},                # Rory: mobile
 ]
 
 APRS_URL   = "https://api.aprs.fi/api/get"
-USER_AGENT = "EverydayHam-HostTracker/1.0 (github actions)"
+USER_AGENT = "EverydayHam-HostTracker/2.0 (github actions)"
+BATCH      = 20   # aprs.fi allows up to 20 targets per query
 
 
-# ------------------------------------------------------------------ helpers
 def to_float(x, default=0.0):
     try:
         return float(x)
@@ -51,8 +50,12 @@ def to_float(x, default=0.0):
         return default
 
 
-def fetch_positions(calls):
-    """One batched query for the whole roster (aprs.fi allows up to 20)."""
+def chunks(seq, n):
+    for i in range(0, len(seq), n):
+        yield seq[i:i + n]
+
+
+def fetch(calls):
     query = urllib.parse.urlencode({
         "name":   ",".join(calls),
         "what":   "loc",
@@ -68,20 +71,21 @@ def fetch_positions(calls):
     return data.get("entries", [])
 
 
-def fetch_with_retry(calls, tries=3):
-    """Simple exponential backoff, per aprs.fi guidance."""
-    delay = 2
-    for attempt in range(tries):
-        try:
-            return fetch_positions(calls)
-        except Exception as exc:  # noqa: BLE001
-            if attempt == tries - 1:
-                raise
-            print(f"fetch attempt {attempt + 1} failed: {exc}; retrying in {delay}s",
-                  file=sys.stderr)
-            time.sleep(delay)
-            delay *= 2
-    return []
+def fetch_all(all_calls, tries=3):
+    entries = []
+    for batch in chunks(all_calls, BATCH):
+        delay = 2
+        for attempt in range(tries):
+            try:
+                entries.extend(fetch(batch))
+                break
+            except Exception as exc:  # noqa: BLE001
+                if attempt == tries - 1:
+                    raise
+                print(f"batch retry ({exc})", file=sys.stderr)
+                time.sleep(delay)
+                delay *= 2
+    return entries
 
 
 def load_existing():
@@ -93,74 +97,75 @@ def load_existing():
     return {"generated": 0, "hosts": []}
 
 
-# ------------------------------------------------------------------ main
 def main():
     if not API_KEY:
         print("APRS_API_KEY is not set", file=sys.stderr)
         sys.exit(1)
 
     doc = load_existing()
-    hosts = {h.get("callsign"): h for h in doc.get("hosts", [])}
-    for call in ROSTER:
-        hosts.setdefault(call, {"callsign": call, "track": [], "last_seen": 0})
+    prev = {h.get("callsign"): h for h in doc.get("hosts", [])}
+
+    # flatten the watch lists into one de-duped query set
+    all_calls = []
+    for host in HOSTS:
+        for ssid in host["watch"]:
+            if ssid not in all_calls:
+                all_calls.append(ssid)
 
     try:
-        entries = fetch_with_retry(ROSTER)
+        entries = fetch_all(all_calls)
     except Exception as exc:  # noqa: BLE001
-        # Graceful: keep the existing file so the board shows last-known data.
         print(f"poll failed, leaving file untouched: {exc}", file=sys.stderr)
         sys.exit(0)
 
-    now = int(time.time())
     by_call = {e.get("name", "").upper(): e for e in entries}
-
-    appended = 0
-    for call in ROSTER:
-        host = hosts[call]
-        host.setdefault("track", [])
-        host.setdefault("last_seen", 0)
-
-        entry = by_call.get(call.upper())
-        if not entry:
-            continue  # not heard recently; existing trail just ages out
-
-        # `lasttime` = last time a packet was heard from this target.
-        lasttime = int(to_float(entry.get("lasttime") or entry.get("time") or now))
-        if lasttime <= host["last_seen"]:
-            continue  # no new beacon since last poll -> no duplicate point
-
-        lat = entry.get("lat")
-        lng = entry.get("lng")
-        if lat is None or lng is None:
-            continue
-
-        host["track"].append({
-            "time":   lasttime,
-            "lat":    round(to_float(lat), 6),
-            "lng":    round(to_float(lng), 6),
-            "speed":  round(to_float(entry.get("speed")), 1),  # km/h
-            "course": int(to_float(entry.get("course"))),       # degrees
-        })
-        host["last_seen"] = lasttime
-        appended += 1
-
-    # prune to the trailing window + hard cap, preserve roster order
+    now = int(time.time())
     cutoff = now - TRAIL_HOURS * 3600
     out_hosts = []
-    for call in ROSTER:
-        host = hosts.get(call, {"callsign": call, "track": [], "last_seen": 0})
-        track = [p for p in host.get("track", []) if p["time"] >= cutoff]
+    appended = 0
+
+    for host in HOSTS:
+        hid = host["id"]
+        rec = prev.get(hid, {})
+        track = list(rec.get("track", []))
+        seen = dict(rec.get("seen", {}))   # per-SSID last-heard, to avoid duplicates
+
+        # find the single most recent NEW beacon across this person's radios
+        newest = None
+        for ssid in host["watch"]:
+            entry = by_call.get(ssid.upper())
+            if not entry:
+                continue
+            lasttime = int(to_float(entry.get("lasttime") or entry.get("time") or now))
+            if lasttime > seen.get(ssid, 0):
+                if newest is None or lasttime > newest[1]:
+                    newest = (ssid, lasttime, entry)
+            seen[ssid] = max(seen.get(ssid, 0), lasttime)
+
+        # one point per poll: the person's most recent position, from any radio
+        if newest:
+            ssid, lasttime, entry = newest
+            lat, lng = entry.get("lat"), entry.get("lng")
+            if lat is not None and lng is not None:
+                track.append({
+                    "time":   lasttime,
+                    "lat":    round(to_float(lat), 6),
+                    "lng":    round(to_float(lng), 6),
+                    "speed":  round(to_float(entry.get("speed")), 1),
+                    "course": int(to_float(entry.get("course"))),
+                    "ssid":   ssid,
+                })
+                appended += 1
+
+        track = [p for p in track if p.get("time", 0) >= cutoff]
         track.sort(key=lambda p: p["time"])
         if len(track) > MAX_POINTS:
             track = track[-MAX_POINTS:]
-        out_hosts.append({
-            "callsign":  call,
-            "track":     track,
-            "last_seen": host.get("last_seen", 0),
-        })
 
-    out = {"generated": now, "hosts": out_hosts}
-    OUT_FILE.write_text(json.dumps(out, separators=(",", ":")))
+        out_hosts.append({"callsign": hid, "track": track, "seen": seen})
+
+    OUT_FILE.write_text(json.dumps({"generated": now, "hosts": out_hosts},
+                                   separators=(",", ":")))
     summary = ", ".join(f"{h['callsign']}:{len(h['track'])}" for h in out_hosts)
     print(f"wrote {OUT_FILE} ({appended} new) -> {summary}")
 
