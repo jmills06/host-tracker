@@ -115,22 +115,25 @@
     border: 1px solid rgba(255,255,255,0.10);
     box-shadow: 0 12px 40px rgba(0,0,0,0.45);
   }
-  #map { position: absolute; inset: 0; background: var(--navy-dark); }
+  #map { position: absolute; inset: 0; background: #e9eef2; }
   /* Static tint on the tiles to pull the basemap toward the brand navy.
      Static only - never animated (GPU/animation hygiene). */
   #map .leaflet-tile-pane {
-    filter: saturate(0.55) brightness(0.72) hue-rotate(178deg) contrast(1.05);
+    /* No CSS filter here on purpose. Filtering the whole tile layer forces a
+       constant recomposite under the animated canvas, which is very slow on
+       low-power devices (Raspberry Pi). dark_all is already dark, and
+       #mapwrap::after tints it toward navy for free. */
   }
-  #map .leaflet-container { background: var(--navy-dark); }
+  #map .leaflet-container { background: #e9eef2; }
 
   /* Navy vignette so markers and trails read against the map edges. */
   #mapwrap::after {
     content: "";
     position: absolute; inset: 0;
     pointer-events: none;
-    box-shadow: inset 0 0 120px 30px rgba(13,22,32,0.85);
+    box-shadow: inset 0 0 90px 18px rgba(13,22,32,0.30);
     background:
-      radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(13,22,32,0.55) 100%);
+      radial-gradient(125% 95% at 50% 50%, transparent 68%, rgba(13,22,32,0.20) 100%);
   }
 
   #trails, #avatars {
@@ -250,11 +253,10 @@
     position: absolute;
     left: 16px; top: 16px;
     z-index: 402;
-    background: rgba(13,22,32,0.78);
+    background: rgba(13,22,32,0.9);
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 12px;
     padding: 12px 14px;
-    backdrop-filter: blur(6px);
   }
   .map-legend .lh {
     font-family: 'Oswald', sans-serif;
@@ -285,7 +287,6 @@
     letter-spacing: 2px;
     font-size: 16px;
     text-transform: uppercase;
-    backdrop-filter: blur(6px);
   }
   .mode-badge .mdot {
     width: 11px; height: 11px; border-radius: 50%;
@@ -524,6 +525,8 @@ const POLL_SECONDS     = 120;    // how often to re-fetch the snapshot
 const TRAIL_HOURS      = 24;     // length of the breadcrumb trail
 const LIVE_SECONDS     = 40;     // time spent in LIVE before a REPLAY sweep
 const REPLAY_SECONDS   = 16;     // duration of one 24h time-lapse sweep
+const RENDER_FPS       = 20;     // draw cap. Ambient signage does not need 60fps;
+                                 // lower this to 12-15 on very weak hardware.
 const FRESH_MINUTES    = 10;     // "just heard" window -> pulse + fresh dot
 const STALE_MINUTES    = 45;     // no beacon this long -> NOT HEARD
 const DATA_STALE_MIN   = 20;     // snapshot older than this -> footer stale badge
@@ -544,6 +547,13 @@ const DAY_END_HR    = 20;
 
 const MODE_PALETTE = ['#ff7030', '#4a90e2', '#9b59b6', '#2ecc71'];
 
+// Basemap. Voyager is light and readable (same as the POTA boards).
+// Alternatives (all free, no API key):
+//   Positron (neutral light grey): https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png
+//   Dark (near-black, hard to read): https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png
+const MAP_TILES  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+const MAP_ATTRIB = '&copy; OpenStreetMap &copy; CARTO';
+
 /* ============================================================
    STATE
    ============================================================ */
@@ -559,6 +569,9 @@ let tickCount = 0;
 let mode = 'LIVE';
 let modeElapsed = 0;         // seconds spent in current mode (fractional)
 let lastFrameMs = performance.now();
+let lastDrawMs = 0;          // throttles the actual drawing to RENDER_FPS
+let needsRedraw = true;      // in LIVE we only repaint when something changes
+const FRAME_MIN_MS = 1000 / RENDER_FPS;
 
 /* ============================================================
    GEO HELPERS
@@ -728,6 +741,7 @@ function applyData(data) {
   hosts = colored;
   dataGeneratedMs = data.generated;
   sourceLabel = data.source || sourceLabel;
+  needsRedraw = true;
 
   if (sig !== lastSignature) {
     buildLegend();
@@ -746,9 +760,9 @@ function initMap() {
     boxZoom: false, keyboard: false, touchZoom: false, tap: false,
     inertia: false, zoomSnap: 0.1
   });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  L.tileLayer(MAP_TILES, {
     subdomains: 'abcd', maxZoom: 19,
-    attribution: '&copy; OpenStreetMap &copy; CARTO'
+    attribution: MAP_ATTRIB
   }).addTo(map);
 
   trailCanvas = document.getElementById('trails');
@@ -777,6 +791,7 @@ function frameBounds() {
   pts.push([CLARKSTON.lat, CLARKSTON.lng]);
   if (!pts.length) { map.setView([CLARKSTON.lat, CLARKSTON.lng], 10); return; }
   map.fitBounds(pts, { padding: [70, 70], animate: false });
+  needsRedraw = true;
 }
 
 /* ============================================================
@@ -911,26 +926,40 @@ function ageText(min) {
    Data, clock, ages and mode switching live on the master tick.
    ============================================================ */
 function renderLoop(nowMs) {
-  const dt = (nowMs - lastFrameMs) / 1000;
+  const dt = Math.min(0.1, (nowMs - lastFrameMs) / 1000);
   lastFrameMs = nowMs;
 
-  // advance mode scheduler
+  // mode scheduler advances in real time every frame (cheap)
+  const prevMode = mode;
   modeElapsed += dt;
   if (mode === 'LIVE' && modeElapsed >= LIVE_SECONDS) { mode = 'REPLAY'; modeElapsed = 0; }
   else if (mode === 'REPLAY' && modeElapsed >= REPLAY_SECONDS) { mode = 'LIVE'; modeElapsed = 0; }
+  if (mode !== prevMode) needsRedraw = true;
 
-  // atMs: LIVE tracks real now; REPLAY sweeps the last 24h
-  let atMs, replayFrac = 0;
-  const now = Date.now();
-  if (mode === 'LIVE') atMs = now;
-  else {
-    replayFrac = modeElapsed / REPLAY_SECONDS;
-    atMs = (now - TRAIL_HOURS*3600*1000) + replayFrac * TRAIL_HOURS*3600*1000;
+  // cap the actual drawing to RENDER_FPS
+  if (nowMs - lastDrawMs >= FRAME_MIN_MS) {
+    lastDrawMs = nowMs;
+
+    let atMs, replayFrac = 0;
+    const now = Date.now();
+    if (mode === 'LIVE') {
+      atMs = now;
+    } else {
+      replayFrac = modeElapsed / REPLAY_SECONDS;
+      atMs = (now - TRAIL_HOURS*3600*1000) + replayFrac * TRAIL_HOURS*3600*1000;
+    }
+
+    // In LIVE the positions are fixed between polls, so only repaint when data
+    // changed, the mode flipped, or a ripple is still animating. REPLAY always
+    // paints (throttled). This keeps the canvas idle most of the time.
+    const mustDraw = (mode === 'REPLAY') || needsRedraw || ripples.length > 0;
+    if (mustDraw) {
+      drawTrails(atMs);
+      drawAvatars(atMs);
+      if (mode === 'LIVE') needsRedraw = false;
+    }
+    updateModeUI(replayFrac);
   }
-
-  drawTrails(atMs);
-  drawAvatars(atMs);
-  updateModeUI(replayFrac);
 
   requestAnimationFrame(renderLoop);
 }
@@ -953,29 +982,26 @@ function drawTrails(atMs) {
     const oldest = pts[0].time;
     const span = Math.max(1, headTime - oldest);
 
-    // soft glow pass then bright core pass
-    for (let pass = 0; pass < 2; pass++) {
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      for (let i = 1; i < pts.length; i++) {
-        const a = ll(pts[i-1]), b = ll(pts[i]);
-        const along = (pts[i].time - oldest) / span;          // 0 tail -> 1 head
-        const fade = Math.pow(along, 1.4);                    // bias brightness to head
-        const nf = nightFactor(pts[i].time);
-        const alpha = (pass === 0 ? 0.10 : 0.9) * fade * nf;
-        if (alpha < 0.015) continue;
-        ctx.strokeStyle = hexA(host.color, alpha);
-        ctx.lineWidth = pass === 0 ? GLOW_WIDTH : TRAIL_WIDTH;
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      }
+    // single stroke pass with per-segment fade (no per-frame blur, which is
+    // the expensive part on low-power GPUs)
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineWidth = TRAIL_WIDTH;
+    for (let i = 1; i < pts.length; i++) {
+      const a = ll(pts[i-1]), b = ll(pts[i]);
+      const along = (pts[i].time - oldest) / span;   // 0 tail -> 1 head
+      const fade = Math.pow(along, 1.4);             // bias brightness to head
+      const nf = nightFactor(pts[i].time);
+      const alpha = 0.92 * fade * nf;
+      if (alpha < 0.02) continue;
+      ctx.strokeStyle = hexA(host.color, alpha);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
-    // glowing head
+    // head: a soft halo plus a solid core, both plain fills (no shadowBlur)
     const head = ll(pts[pts.length-1]);
-    const pulse = 0.6 + 0.4*Math.sin(performance.now()/500);
-    ctx.beginPath();
-    ctx.fillStyle = hexA(host.color, 0.9);
-    ctx.shadowColor = host.color; ctx.shadowBlur = 16*pulse;
+    ctx.beginPath(); ctx.fillStyle = hexA(host.color, 0.25);
+    ctx.arc(head.x, head.y, 9, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.fillStyle = hexA(host.color, 0.95);
     ctx.arc(head.x, head.y, 4.5, 0, Math.PI*2); ctx.fill();
-    ctx.shadowBlur = 0;
   });
 
   drawRipples();
