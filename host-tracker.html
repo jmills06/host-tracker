@@ -214,10 +214,12 @@
   .host-avatar img.pose { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .host-avatar:not(.imgloaded) img.pose { display: none; }
   .host-avatar.imgloaded .ini { display: none; }
+  /* Not-heard markers fade gently (readable, but clearly "asleep").
+     Old values were grayscale(0.7) / opacity 0.55, which washed out badly. */
   .host-marker.dim .host-avatar {
-    filter: grayscale(0.7);
-    opacity: 0.55;
-    box-shadow: none;
+    filter: grayscale(0.35);
+    opacity: 0.82;
+    box-shadow: 0 0 14px rgba(0,0,0,0.55);
   }
   .host-tag {
     margin-top: 5px;
@@ -341,7 +343,7 @@
   .card .avatar img.pose { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .card .avatar:not(.imgloaded) img.pose { display: none; }
   .card .avatar.imgloaded .ini { display: none; }
-  .card.notheard .avatar { filter: grayscale(0.8); opacity: 0.5; box-shadow: none; }
+  .card.notheard .avatar { filter: grayscale(0.35); opacity: 0.82; box-shadow: 0 0 14px rgba(0,0,0,0.4); }
   .card .who { min-width: 0; }
   .card .call {
     font-family: 'Oswald', sans-serif;
