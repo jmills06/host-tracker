@@ -11,7 +11,7 @@
 
 <style>
   /* ============================================================
-     THE EVERYDAY HAM - HOST TRACKER
+     THE EVERYDAY HAM - HOST TRACKER  (v2: 72-hour history board)
      Portrait digital signage: 1080 wide x 1920 tall (DakBoard)
      Non-interactive, display only.
      ============================================================ */
@@ -116,17 +116,9 @@
     box-shadow: 0 12px 40px rgba(0,0,0,0.45);
   }
   #map { position: absolute; inset: 0; background: #e9eef2; }
-  /* Static tint on the tiles to pull the basemap toward the brand navy.
-     Static only - never animated (GPU/animation hygiene). */
-  #map .leaflet-tile-pane {
-    /* No CSS filter here on purpose. Filtering the whole tile layer forces a
-       constant recomposite under the animated canvas, which is very slow on
-       low-power devices (Raspberry Pi). dark_all is already dark, and
-       #mapwrap::after tints it toward navy for free. */
-  }
   #map .leaflet-container { background: #e9eef2; }
 
-  /* Navy vignette so markers and trails read against the map edges. */
+  /* Gentle navy frame; light enough that labels stay readable. */
   #mapwrap::after {
     content: "";
     position: absolute; inset: 0;
@@ -165,17 +157,16 @@
     transform: translate(-50%, -50%);
     border-radius: 50%;
     border: 2px solid var(--hc);
-    opacity: 0.0;
+    opacity: 0;
   }
-  .host-marker.rolling .host-ring,
-  .host-marker.fresh .host-ring {
+  .host-marker.rolling .host-ring {
     opacity: 0.55;
     animation: ringpulse 1.8s ease-out infinite;
   }
   @keyframes ringpulse {
     0%   { transform: translate(-50%,-50%) scale(0.65); opacity: 0.6; }
-    70%  { opacity: 0.0; }
-    100% { transform: translate(-50%,-50%) scale(1.5); opacity: 0.0; }
+    70%  { opacity: 0; }
+    100% { transform: translate(-50%,-50%) scale(1.5); opacity: 0; }
   }
   .host-beam {
     position: absolute;
@@ -197,11 +188,7 @@
   }
   .host-marker.rolling .host-beam { opacity: 0.95; }
 
-  .host-body {
-    position: relative;
-    z-index: 2;
-    will-change: transform;
-  }
+  .host-body { position: relative; z-index: 2; will-change: transform; }
   .host-marker.rolling .host-body { animation: bob 0.85s ease-in-out infinite; }
   @keyframes bob {
     0%, 100% { transform: translateY(0); }
@@ -211,8 +198,6 @@
     width: 52px; height: 52px;
     border-radius: 50%;
     background: var(--hc);
-    background-size: cover;
-    background-position: center;
     border: 3px solid var(--cream);
     box-shadow: 0 0 14px rgba(0,0,0,0.55), 0 0 18px var(--hc);
     display: flex;
@@ -248,7 +233,7 @@
     white-space: nowrap;
   }
 
-  /* ---------- Map overlays: legend + mode badge ---------- */
+  /* ---------- Map overlays ---------- */
   .map-legend {
     position: absolute;
     left: 16px; top: 16px;
@@ -266,56 +251,59 @@
     color: var(--orange);
     margin-bottom: 8px;
   }
-  .legend-row {
-    display: flex; align-items: center; gap: 9px;
-    margin: 5px 0;
-  }
+  .legend-row { display: flex; align-items: center; gap: 9px; margin: 5px 0; }
   .legend-dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px var(--d); background: var(--d); }
   .legend-name { font-family: 'Oswald', sans-serif; font-weight: 500; font-size: 16px; letter-spacing: 0.5px; }
   .legend-call { font-size: 12px; color: var(--cream-50); letter-spacing: 0.5px; }
 
-  .mode-badge {
+  .window-badge {
     position: absolute;
     right: 16px; top: 16px;
     z-index: 402;
-    display: flex; align-items: center; gap: 9px;
-    background: rgba(13,22,32,0.80);
+    background: rgba(13,22,32,0.9);
     border: 1px solid rgba(255,255,255,0.14);
     border-radius: 999px;
-    padding: 8px 16px 8px 12px;
+    padding: 8px 16px;
     font-family: 'Oswald', sans-serif;
     letter-spacing: 2px;
     font-size: 16px;
     text-transform: uppercase;
+    color: var(--cream-80);
   }
-  .mode-badge .mdot {
-    width: 11px; height: 11px; border-radius: 50%;
-    background: var(--good);
-    box-shadow: 0 0 10px var(--good);
-  }
-  .mode-badge.replay .mdot { background: var(--orange); box-shadow: 0 0 10px var(--orange); }
-  .mode-badge.live .mdot { animation: livepulse 1.6s ease-in-out infinite; }
-  @keyframes livepulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-  .mode-badge .sub { font-size: 12px; color: var(--cream-50); letter-spacing: 1px; }
+  .window-badge b { color: var(--orange); font-weight: 600; }
 
-  /* Replay scrubber */
-  .replay-bar {
+  /* Age scale: fresh (green) -> 3 days (red) */
+  .age-legend {
     position: absolute;
-    left: 16px; right: 16px; bottom: 14px;
+    left: 16px; bottom: 14px;
     z-index: 402;
-    height: 4px;
-    border-radius: 3px;
-    background: rgba(255,255,255,0.12);
-    overflow: hidden;
-    opacity: 0;
-    transition: opacity 0.35s ease;
+    background: rgba(13,22,32,0.9);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 10px 14px;
+    width: 240px;
   }
-  .replay-bar.show { opacity: 1; }
-  .replay-fill {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(90deg, rgba(255,112,48,0.4), var(--orange));
-    box-shadow: 0 0 10px var(--orange);
+  .age-legend .lh {
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-bottom: 7px;
+  }
+  .age-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #2ecc71 0%, #f39c12 50%, #e74c3c 100%);
+  }
+  .age-ends {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--cream-50);
   }
 
   /* ---------- Bottom status cards ---------- */
@@ -342,7 +330,6 @@
     width: 54px; height: 54px;
     border-radius: 50%;
     background: var(--hc);
-    background-size: cover; background-position: center;
     border: 3px solid var(--cream);
     display: flex; align-items: center; justify-content: center;
     font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 21px;
@@ -362,15 +349,7 @@
     font-size: 30px;
     letter-spacing: 1px;
     line-height: 1;
-    display: flex; align-items: center; gap: 12px;
   }
-  .freshdot {
-    width: 11px; height: 11px; border-radius: 50%;
-    background: var(--orange);
-    box-shadow: 0 0 10px var(--orange);
-    opacity: 0;
-  }
-  .card.fresh .freshdot { opacity: 1; animation: livepulse 1.4s ease-in-out infinite; }
   .card .name { font-size: 18px; color: var(--cream-80); margin-top: 5px; letter-spacing: 0.3px; }
   .card .heard { font-size: 15px; color: var(--cream-50); margin-top: 3px; letter-spacing: 0.3px; text-transform: uppercase; }
 
@@ -469,12 +448,13 @@
       <div class="lh">On the air</div>
     </div>
 
-    <div class="mode-badge live" id="modeBadge">
-      <span class="mdot"></span>
-      <span id="modeText">Live</span>
-    </div>
+    <div class="window-badge">Last <b>72</b> hours</div>
 
-    <div class="replay-bar" id="replayBar"><div class="replay-fill" id="replayFill"></div></div>
+    <div class="age-legend">
+      <div class="lh">Trail age</div>
+      <div class="age-bar"></div>
+      <div class="age-ends"><span>Now</span><span>3 days</span></div>
+    </div>
   </div>
 
   <div id="cards"></div>
@@ -494,23 +474,20 @@
    CONFIG  -  tune everything here
    ============================================================ */
 
-// Where the poller writes the snapshot. If the fetch fails (or the file
-// does not exist yet) the board runs on built-in simulated tracks.
-const DATA_URL       = 'host-tracker.json';
+const DATA_URL        = 'host-tracker.json';
 const FORCE_SIMULATED = false;   // set true to always use the demo data
 
-// Home base of the show. Distances on the cards are measured from here.
+// Home base of the show. "From home" on the cards is measured per host;
+// Clarkston anchors the fallback view when nobody has data yet.
 const CLARKSTON = { lat: 42.7356, lng: -83.4183 };
 
-// Roster.  Replace the example callsigns (N0CALL patterns) with your real
-// ones and drop in custom avatar art via `icon` (any square image URL).
-// `color` is optional; leave it out to auto-assign from the mode palette.
+// Roster. `call` must match the poller output keys (base callsigns).
 const HOSTS = [
-  { call: 'K8JKU', name: 'James', color: '#ff7030', initials: 'JA',
+  { call: 'K8JKU', name: 'James', color: '#e74c3c', initials: 'JA',
     home: { lat: 42.7356, lng: -83.4183 },                          // Clarkston
     poses: { home: 'icons/james-home.png', portable: 'icons/james-portable.png', mobile: 'icons/james-mobile.png' } },
 
-  { call: 'N8JRD', name: 'Jim', color: '#4a90e2', initials: 'JI',
+  { call: 'N8JRD', name: 'Jim', color: '#ff7030', initials: 'JI',
     home: { lat: 42.4606, lng: -83.6516 },                          // South Lyon
     poses: { home: 'icons/jim-home.png', portable: 'icons/jim-portable.png', mobile: 'icons/jim-mobile.png' } },
 
@@ -520,67 +497,60 @@ const HOSTS = [
 ];
 
 // Timing / behaviour
-const MASTER_TICK_MS   = 1000;   // single master tick for clock, ages, mode
-const POLL_SECONDS     = 120;    // how often to re-fetch the snapshot
-const TRAIL_HOURS      = 24;     // length of the breadcrumb trail
-const LIVE_SECONDS     = 40;     // time spent in LIVE before a REPLAY sweep
-const REPLAY_SECONDS   = 16;     // duration of one 24h time-lapse sweep
-const RENDER_FPS       = 20;     // draw cap. Ambient signage does not need 60fps;
-                                 // lower this to 12-15 on very weak hardware.
-const FRESH_MINUTES    = 10;     // "just heard" window -> pulse + fresh dot
-const STALE_MINUTES    = 45;     // no beacon this long -> NOT HEARD
-const DATA_STALE_MIN   = 20;     // snapshot older than this -> footer stale badge
+const MASTER_TICK_MS = 1000;   // single master tick: clock, cards, poll cadence
+const POLL_SECONDS   = 120;    // how often to re-fetch the snapshot
+const TRAIL_HOURS    = 72;     // history window (3 days). Match the poller.
+const FRESH_MINUTES  = 10;     // beacon this recent -> vivid green trail head
+const STALE_MINUTES  = 45;     // no beacon this long -> NOT HEARD
+const DATA_STALE_MIN = 20;     // snapshot older than this -> footer stale badge
 
 // Classification
-const MOVING_SPEED_KMH = 8;      // above this a station is ROLLING
-const HOME_RADIUS_KM   = 0.4;    // within this of `home` -> HOME (else PARKED)
+const MOVING_SPEED_KMH = 8;    // above this a station is ROLLING
+const HOME_RADIUS_KM   = 0.4;  // within this of `home` -> HOME (else PARKED)
 
 // Display units
 const KM_TO_MI = 0.621371;
 
-// Trail look
-const TRAIL_WIDTH   = 3.5;
-const GLOW_WIDTH    = 11;
-const NIGHT_DIM     = 0.5;       // multiplier for points logged overnight
-const DAY_START_HR  = 7;
-const DAY_END_HR    = 20;
+// Rendering (Pi 5 has headroom; drop RENDER_FPS to 15-20 on weak hardware)
+const RENDER_FPS   = 30;
+const TRAIL_WIDTH  = 4;        // age-colored core line
+const CASING_WIDTH = 9;        // host-color identity casing under the core
+const CASING_ALPHA = 0.30;
+const PULSE_PERIOD_S = 14;     // seconds for the traveling pulse to run a trail
+const MIDNIGHT_TICKS = true;   // small cream dots at each local midnight
+
+// Trail age colors: fresh -> mid -> old  (matches the on-map legend)
+const AGE_FRESH = '#2ecc71';
+const AGE_MID   = '#f39c12';
+const AGE_OLD   = '#e74c3c';
 
 const MODE_PALETTE = ['#ff7030', '#4a90e2', '#9b59b6', '#2ecc71'];
 
 // Basemap. Voyager is light and readable (same as the POTA boards).
 // Alternatives (all free, no API key):
 //   Positron (neutral light grey): https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png
-//   Dark (near-black, hard to read): https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png
 const MAP_TILES  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 const MAP_ATTRIB = '&copy; OpenStreetMap &copy; CARTO';
 
-// Auto-zoom: pick the tightest zoom that still fits everyone.
-const FIT_MODE         = 'people'; // 'people' = fit current positions (tightest).
-                                   // 'trails' = fit the whole 24h trails (nothing clips).
-const FIT_MAX_ZOOM     = 14;       // never zoom tighter than this (clustered/single host)
-const FIT_PADDING_PX   = 80;       // breathing room around the outermost person
-const FIT_INCLUDE_HOME = false;    // also keep Clarkston (home base) in frame
-const FIT_FALLBACK_ZOOM= 11;       // used when nobody has a position yet
-const AUTO_REFIT       = true;     // re-fit as people move or appear
+// Auto-zoom: tightest zoom that fits the chosen content.
+const FIT_MODE          = 'trails'; // 'trails' = whole 72h paths stay on screen.
+                                    // 'people' = only current positions (tighter).
+const FIT_MAX_ZOOM      = 14;
+const FIT_PADDING_PX    = 80;
+const FIT_FALLBACK_ZOOM = 11;
+const AUTO_REFIT        = true;
 
 /* ============================================================
    STATE
    ============================================================ */
 let map, trailCanvas, ctx, avatarLayer;
-let hosts = [];              // enriched roster + tracks
-let dataGeneratedMs = 0;     // when the current snapshot was produced
+let hosts = [];
+let dataGeneratedMs = 0;
 let sourceLabel = 'Simulated data';
 let lastSignature = '';
 let lastFitSig = '';
-let ripples = [];            // active fresh-beacon ripples
 let tickCount = 0;
-
-// LIVE / REPLAY scheduler
-let mode = 'LIVE';
-let modeElapsed = 0;         // seconds spent in current mode (fractional)
-let lastFrameMs = performance.now();
-let lastDrawMs = 0;          // throttles the actual drawing to RENDER_FPS
-let needsRedraw = true;      // in LIVE we only repaint when something changes
+let lastDrawMs = 0;
 const FRAME_MIN_MS = 1000 / RENDER_FPS;
 
 /* ============================================================
@@ -594,21 +564,99 @@ function haversineKm(a, b) {
   const h = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
-function bearingDeg(a, b) {
-  const y = Math.sin((b.lng-a.lng)*Math.PI/180) * Math.cos(b.lat*Math.PI/180);
-  const x = Math.cos(a.lat*Math.PI/180)*Math.sin(b.lat*Math.PI/180) -
-            Math.sin(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.cos((b.lng-a.lng)*Math.PI/180);
-  return (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
-}
 function compass(deg) {
   const dirs = ['N','NE','E','SE','S','SW','W','NW'];
   return dirs[Math.round(deg/45) % 8];
 }
 
 /* ============================================================
-   SIMULATED DATA
-   Builds believable 24h tracks so the board runs before the
-   poller exists.  Deterministic: same tracks on every load.
+   CITY LOOKUP (offline, no API)
+   The state pill shows the city a host was last reported in.
+   Nearest entry wins. Dense around SE Michigan, with wider
+   Michigan coverage for road trips and POTA runs. Add rows
+   freely; format is [name, lat, lng].
+   ============================================================ */
+const CITIES = [
+  // Oakland / home turf
+  ['Clarkston',42.7356,-83.4183],['Waterford',42.6931,-83.4083],['White Lake',42.6530,-83.5350],
+  ['Highland',42.6373,-83.6166],['Milford',42.5931,-83.6005],['Commerce Twp',42.5906,-83.4905],
+  ['Walled Lake',42.5378,-83.4811],['Wixom',42.5249,-83.5361],['Novi',42.4806,-83.4755],
+  ['South Lyon',42.4606,-83.6516],['Northville',42.4311,-83.4833],['Farmington Hills',42.4989,-83.3677],
+  ['West Bloomfield',42.5690,-83.3836],['Bloomfield Hills',42.5837,-83.2455],['Birmingham',42.5467,-83.2113],
+  ['Pontiac',42.6389,-83.2910],['Auburn Hills',42.6875,-83.2341],['Rochester',42.6806,-83.1338],
+  ['Rochester Hills',42.6580,-83.1499],['Troy',42.6064,-83.1498],['Royal Oak',42.4895,-83.1446],
+  ['Ferndale',42.4603,-83.1346],['Southfield',42.4734,-83.2219],['Lake Orion',42.7845,-83.2397],
+  ['Oxford',42.8245,-83.2647],['Ortonville',42.8522,-83.4430],['Holly',42.7920,-83.6277],
+  // Genesee / Livingston / Lapeer
+  ['Fenton',42.7978,-83.7049],['Linden',42.8142,-83.7827],['Grand Blanc',42.9275,-83.6300],
+  ['Flint',43.0125,-83.6875],['Davison',43.0345,-83.5180],['Lapeer',43.0514,-83.3188],
+  ['Imlay City',43.0247,-83.0777],['Brighton',42.5295,-83.7802],['Howell',42.6073,-83.9294],
+  ['Hartland',42.6428,-83.7500],['Pinckney',42.4570,-83.9480],['Fowlerville',42.6606,-84.0730],
+  // Wayne / Washtenaw / Monroe
+  ['Detroit',42.3314,-83.0458],['Dearborn',42.3223,-83.1763],['Livonia',42.3684,-83.3527],
+  ['Plymouth',42.3714,-83.4702],['Canton',42.3087,-83.4821],['Westland',42.3242,-83.4002],
+  ['Ann Arbor',42.2808,-83.7430],['Ypsilanti',42.2411,-83.6129],['Dexter',42.3384,-83.8897],
+  ['Chelsea',42.3180,-84.0205],['Saline',42.1668,-83.7813],['Monroe',41.9165,-83.3977],
+  // Macomb / St. Clair / Thumb
+  ['Sterling Heights',42.5803,-83.0302],['Warren',42.5145,-83.0147],['Utica',42.6261,-83.0335],
+  ['Romeo',42.8028,-83.0130],['Mount Clemens',42.5973,-82.8780],['Port Huron',42.9709,-82.4249],
+  ['Sandusky',43.4203,-82.8296],['Bad Axe',43.8017,-82.9994],['Caro',43.4909,-83.3983],
+  ['Port Austin',44.0445,-82.9938],
+  // Mid / West Michigan
+  ['Lansing',42.7325,-84.5555],['East Lansing',42.7370,-84.4839],['Jackson',42.2459,-84.4013],
+  ['Owosso',42.9978,-84.1766],['Saginaw',43.4195,-83.9508],['Bay City',43.5945,-83.8889],
+  ['Midland',43.6156,-84.2472],['Frankenmuth',43.3317,-83.7380],['Mount Pleasant',43.5978,-84.7675],
+  ['Big Rapids',43.6981,-85.4837],['Grand Rapids',42.9634,-85.6681],['Kalamazoo',42.2917,-85.5872],
+  ['Battle Creek',42.3212,-85.1797],['Muskegon',43.2342,-86.2484],['Holland',42.7875,-86.1089],
+  ['Ludington',43.9553,-86.4526],
+  // Up North / UP (POTA country)
+  ['Cadillac',44.2519,-85.4012],['Traverse City',44.7631,-85.6206],['Grayling',44.6614,-84.7147],
+  ['Gaylord',45.0275,-84.6748],['Petoskey',45.3733,-84.9553],['Alpena',45.0617,-83.4327],
+  ['Mackinaw City',45.7775,-84.7271],['St. Ignace',45.8683,-84.7273],['Sault Ste. Marie',46.4953,-84.3453],
+  ['Munising',46.4111,-86.6479],['Marquette',46.5436,-87.3954],['Escanaba',45.7452,-87.0646],
+  ['Houghton',47.1211,-88.5690],
+];
+
+function nearestCity(p) {
+  let best = null, bestKm = Infinity;
+  for (const [name, lat, lng] of CITIES) {
+    const km = haversineKm(p, { lat, lng });
+    if (km < bestKm) { bestKm = km; best = name; }
+  }
+  return best || '--';
+}
+
+/* ============================================================
+   COLOR HELPERS
+   ============================================================ */
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n>>16)&255, (n>>8)&255, n&255];
+}
+function rgba(rgb, a) { return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`; }
+function hexA(hex, a) { return rgba(hexToRgb(hex), a); }
+
+const AGE_FRESH_RGB = hexToRgb(AGE_FRESH);
+const AGE_MID_RGB   = hexToRgb(AGE_MID);
+const AGE_OLD_RGB   = hexToRgb(AGE_OLD);
+
+// t: 0 = now (green) -> 1 = TRAIL_HOURS old (red), via amber at the middle
+function ageColor(t, alpha) {
+  t = Math.min(1, Math.max(0, t));
+  let a, b, f;
+  if (t < 0.5) { a = AGE_FRESH_RGB; b = AGE_MID_RGB; f = t / 0.5; }
+  else         { a = AGE_MID_RGB;   b = AGE_OLD_RGB; f = (t - 0.5) / 0.5; }
+  return rgba([
+    Math.round(a[0] + (b[0]-a[0])*f),
+    Math.round(a[1] + (b[1]-a[1])*f),
+    Math.round(a[2] + (b[2]-a[2])*f),
+  ], alpha);
+}
+
+/* ============================================================
+   SIMULATED DATA  (72h)
+   A believable 3-day demo so the board runs before the poller
+   populates. The daily schedule repeats with slight variation.
    ============================================================ */
 function mulberry32(seed) {
   return function() {
@@ -619,25 +667,23 @@ function mulberry32(seed) {
   };
 }
 
-// Position schedules: [minuteFromStart, lat, lng]. Between keyframes we
-// interpolate; identical consecutive points read as parked.
+// One day of keyframes per host: [minuteOfDay, lat, lng]
 const SIM_SCHEDULES = {
-  'K8JKU': [   // ends mid-drive -> currently ROLLING
+  'K8JKU': [
     [0,   42.7356,-83.4183],[600, 42.7356,-83.4183],
-    [660, 42.7942,-83.6247],[780, 42.7942,-83.6247],   // Holly POTA
-    [840, 42.8517,-83.4430],[960, 42.8517,-83.4430],   // Ortonville POTA
-    [1080,42.7356,-83.4183],[1380,42.7356,-83.4183],
-    [1440,42.7610,-83.3200]                             // rolling toward Lake Orion
+    [660, 42.7942,-83.6247],[780, 42.7942,-83.6247],
+    [840, 42.8517,-83.4430],[960, 42.8517,-83.4430],
+    [1080,42.7356,-83.4183],[1440,42.7356,-83.4183]
   ],
-  'N8JRD': [   // commute out and back -> currently HOME/PARKED
-    [0,   42.6931,-83.4083],[420, 42.6931,-83.4083],
-    [510, 43.0125,-83.6875],[960, 43.0125,-83.6875],   // Flint (work)
-    [1050,42.6931,-83.4083],[1440,42.6931,-83.4083]
+  'N8JRD': [
+    [0,   42.4606,-83.6516],[420, 42.4606,-83.6516],
+    [510, 42.4895,-83.1446],[960, 42.4895,-83.1446],
+    [1050,42.4606,-83.6516],[1440,42.4606,-83.6516]
   ],
-  'W8KNX': [   // homebody with one short hop -> currently HOME
-    [0,   42.7847,-83.2394],[720, 42.7847,-83.2394],
-    [750, 42.6389,-83.2910],[810, 42.6389,-83.2910],   // Pontiac
-    [840, 42.7847,-83.2394],[1440,42.7847,-83.2394]
+  'W8KNX': [
+    [0,   42.4606,-83.6516],[720, 42.4606,-83.6516],
+    [750, 42.5251,-83.7791],[810, 42.5251,-83.7791],
+    [840, 42.4606,-83.6516],[1440,42.4606,-83.6516]
   ]
 };
 
@@ -655,26 +701,34 @@ function sampleSchedule(sched, minute) {
   return { lat: last[1], lng: last[2] };
 }
 
+function bearingDeg(a, b) {
+  const y = Math.sin((b.lng-a.lng)*Math.PI/180) * Math.cos(b.lat*Math.PI/180);
+  const x = Math.cos(a.lat*Math.PI/180)*Math.sin(b.lat*Math.PI/180) -
+            Math.sin(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.cos((b.lng-a.lng)*Math.PI/180);
+  return (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
+}
+
 function buildSimulated() {
   const now = Date.now();
-  const stepMin = 4;                       // one beacon every 4 minutes
+  const totalMin = TRAIL_HOURS * 60;
+  const stepMin = 6;
   const roster = HOSTS.map((h, hi) => {
     const rand = mulberry32(0x9E37 + hi*7919);
     const sched = SIM_SCHEDULES[h.call] || [[0,h.home.lat,h.home.lng],[1440,h.home.lat,h.home.lng]];
     const track = [];
     let prev = null;
-    for (let m = 0; m <= 1440; m += stepMin) {
-      const p = sampleSchedule(sched, m);
-      // small jitter so drive legs look organic, near-zero when parked
+    for (let m = 0; m <= totalMin; m += stepMin) {
+      const dayMin = m % 1440;
+      const p = sampleSchedule(sched, dayMin);
       const moving = prev && haversineKm(prev, p) > 0.02;
       const jitter = moving ? 0.0016 : 0.00025;
       const lat = p.lat + (rand()-0.5)*jitter;
       const lng = p.lng + (rand()-0.5)*jitter;
-      const time = now - (1440 - m)*60000;
+      const time = now - (totalMin - m)*60000;
       let speed = 0, course = 0;
       if (prev) {
         const distKm = haversineKm(prev, { lat, lng });
-        speed = distKm / (stepMin/60);     // km/h over the step
+        speed = distKm / (stepMin/60);
         if (distKm > 0.03) course = bearingDeg(prev, { lat, lng });
         else course = prev.course || 0;
       }
@@ -682,32 +736,30 @@ function buildSimulated() {
       track.push(pt);
       prev = pt;
     }
-    return { call: h.call, name: h.name, color: h.color, icon: h.icon,
-             initials: h.initials, home: h.home, track };
+    return { call: h.call, name: h.name, color: h.color,
+             initials: h.initials, home: h.home, poses: h.poses, track };
   });
   return { generated: now, source: 'Simulated data', hosts: roster };
 }
 
 /* ============================================================
    DATA LOADING
-   Expected snapshot schema (what the poller writes):
+   Snapshot schema (what the poller writes):
    {
-     "generated": "2026-07-01T18:00:00Z",   // ISO8601 UTC
+     "generated": 1782939161,                  // unix seconds (or ISO8601)
      "hosts": [
        { "callsign": "K8JKU",
-         "track": [ { "time":"2026-07-01T17:56:00Z",
-                      "lat":42.73, "lng":-83.41,
-                      "speed":0, "course":0 } ]   // speed km/h, course deg
-       }
+         "track": [ { "time": 1782866807,
+                      "lat": 42.73, "lng": -83.41,
+                      "speed": 0, "course": 0 } ] }  // speed km/h, course deg
      ]
    }
-   Roster metadata (name/color/icon/home) comes from HOSTS above; the
-   snapshot only needs callsign + track, so the backend stays simple.
+   Roster metadata (name/color/poses/home) lives in HOSTS above.
    ============================================================ */
 function parseTime(t) {
-  if (typeof t === 'number') return t < 1e12 ? t*1000 : t;  // unix s or ms
+  if (typeof t === 'number') return t < 1e12 ? t*1000 : t;
   let s = String(t);
-  if (!/[zZ]|[+\-]\d\d:?\d\d$/.test(s)) s += 'Z';            // assume UTC
+  if (!/[zZ]|[+\-]\d\d:?\d\d$/.test(s)) s += 'Z';
   return Date.parse(s);
 }
 
@@ -719,6 +771,7 @@ async function loadData() {
     const raw = await res.json();
     const genMs = parseTime(raw.generated || Date.now());
     const cutoff = Date.now() - TRAIL_HOURS*3600*1000;
+    let anyPoints = false;
     const roster = HOSTS.map(h => {
       const rec = (raw.hosts || []).find(x => (x.callsign || x.call) === h.call);
       const track = ((rec && rec.track) || [])
@@ -726,32 +779,29 @@ async function loadData() {
                      speed: +p.speed || 0, course: +p.course || 0 }))
         .filter(p => p.time >= cutoff)
         .sort((a,b) => a.time - b.time);
-      return { call: h.call, name: h.name, color: h.color, icon: h.icon,
-               initials: h.initials, home: h.home, track };
+      if (track.length) anyPoints = true;
+      return { call: h.call, name: h.name, color: h.color,
+               initials: h.initials, home: h.home, poses: h.poses, track };
     });
+    if (!anyPoints && !hosts.length) return applyData(buildSimulated());
     applyData({ generated: genMs, source: 'Live via aprs.fi', hosts: roster });
   } catch (e) {
-    // Graceful fallback: keep whatever is on screen, else show the demo.
     if (!hosts.length) applyData(buildSimulated());
-    else { sourceLabel = 'Simulated data'; }
+    else sourceLabel = 'Simulated data';
   }
 }
 
 function applyData(data) {
-  // Signature guard: only rebuild the DOM when content actually changes.
   const sig = data.hosts.map(h => {
     const last = h.track[h.track.length-1];
     return h.call + ':' + (last ? Math.round(last.time/1000)+','+h.track.length : '0');
   }).join('|');
 
-  const colored = data.hosts.map((h, i) => ({
+  hosts = data.hosts.map((h, i) => ({
     ...h, color: h.color || MODE_PALETTE[i % MODE_PALETTE.length]
   }));
-
-  hosts = colored;
   dataGeneratedMs = data.generated;
   sourceLabel = data.source || sourceLabel;
-  needsRedraw = true;
 
   if (sig !== lastSignature) {
     buildLegend();
@@ -759,7 +809,6 @@ function applyData(data) {
     lastSignature = sig;
   }
 
-  // keep everyone in frame as they move, without re-fitting on every poll
   if (AUTO_REFIT && map) {
     const fsig = fitSignature();
     if (fsig !== lastFitSig) { lastFitSig = fsig; frameBounds(); }
@@ -767,7 +816,7 @@ function applyData(data) {
 }
 
 /* ============================================================
-   MAP + OVERLAYS
+   MAP
    ============================================================ */
 function initMap() {
   map = L.map('map', {
@@ -800,41 +849,34 @@ function sizeCanvas() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-// Collect the points the frame should contain.
 function getFitPoints() {
   const pts = [];
   hosts.forEach(h => {
     if (!h.track || !h.track.length) return;
-    if (FIT_MODE === 'trails') {
-      h.track.forEach(p => pts.push([p.lat, p.lng]));
-    } else {
+    if (FIT_MODE === 'trails') h.track.forEach(p => pts.push([p.lat, p.lng]));
+    else {
       const last = h.track[h.track.length - 1];
       pts.push([last.lat, last.lng]);
     }
   });
-  if (FIT_INCLUDE_HOME) pts.push([CLARKSTON.lat, CLARKSTON.lng]);
   return pts;
 }
 
-// A cheap signature of current positions, so we only re-fit on real movement.
 function fitSignature() {
   return hosts.map(h => {
     const p = h.track && h.track.length ? h.track[h.track.length - 1] : null;
-    return h.call + (p ? ':' + p.lat.toFixed(3) + ',' + p.lng.toFixed(3) : ':-');
+    return h.call + (p ? ':' + p.lat.toFixed(3) + ',' + p.lng.toFixed(3) + ',' + h.track.length : ':-');
   }).join('|') + '|' + FIT_MODE;
 }
 
-// Frame the map to the tightest zoom that still fits everyone.
 function frameBounds() {
   const pts = getFitPoints();
   if (!pts.length) {
     map.setView([CLARKSTON.lat, CLARKSTON.lng], FIT_FALLBACK_ZOOM);
-    needsRedraw = true;
     return;
   }
   const b = L.latLngBounds(pts);
   if (b.getNorthEast().equals(b.getSouthWest())) {
-    // everyone at (effectively) one spot: center on it, clamp the zoom
     map.setView(b.getCenter(), FIT_MAX_ZOOM, { animate: false });
   } else {
     map.fitBounds(b, {
@@ -843,11 +885,10 @@ function frameBounds() {
       animate: false
     });
   }
-  needsRedraw = true;
 }
 
 /* ============================================================
-   LEGEND + CARDS (structure built on data change)
+   LEGEND + CARDS
    ============================================================ */
 function buildLegend() {
   const el = document.getElementById('legend');
@@ -874,15 +915,15 @@ function buildCards() {
     c.innerHTML = `
       <div class="avatar"><img class="pose" alt=""><span class="ini">${h.initials || ''}</span></div>
       <div class="who">
-        <div class="call">${h.call}<span class="freshdot"></span></div>
+        <div class="call">${h.call}</div>
         <div class="name">${h.name}</div>
         <div class="heard" data-heard>--</div>
       </div>
       <div class="metrics">
         <div class="metric"><div class="state-pill" data-state><span class="sd"></span><span data-statetext>--</span></div></div>
-        <div class="metric"><div class="val" data-speed>--</div><div class="lbl">Speed</div></div>
+        <div class="metric"><div class="val" data-miles>--</div><div class="lbl">Miles / 3 days</div></div>
+        <div class="metric"><div class="val" data-far>--</div><div class="lbl">Farthest out</div></div>
         <div class="metric"><div class="val" data-dist>--</div><div class="lbl">From home</div></div>
-        <div class="metric"><div class="val" data-miles>--</div><div class="lbl">Miles today</div></div>
       </div>`;
     wrap.appendChild(c);
   });
@@ -890,12 +931,9 @@ function buildCards() {
 
 /* ============================================================
    POSE SELECTION
-   Maps a host state to a pose image, with graceful fallback so a
-   partial set (e.g. only home + mobile) still works. Legacy single
-   `icon` fields are treated as a home pose.
    ============================================================ */
 function poseFor(host, state) {
-  const p = host.poses || (host.icon ? { home: host.icon } : null);
+  const p = host.poses;
   if (!p) return null;
   const order = ({
     ROLLING:  ['mobile', 'portable', 'home'],
@@ -908,8 +946,6 @@ function poseFor(host, state) {
   return null;
 }
 
-// Swap an avatar's pose image only when it changes. The image reveals
-// itself on load and falls back to initials if the file is missing.
 function setPose(avatarEl, url) {
   if (!avatarEl) return;
   if (!url) { avatarEl.classList.remove('imgloaded'); avatarEl._pose = null; return; }
@@ -923,35 +959,24 @@ function setPose(avatarEl, url) {
 }
 
 /* ============================================================
-   PER-HOST DERIVED STATE
+   PER-HOST DERIVED STATE (current, history-focused)
    ============================================================ */
-function deriveHost(h, atMs) {
+function deriveHost(h) {
   const track = h.track;
-  if (!track.length) return { empty: true };
-
-  // position at time `atMs` (used by REPLAY); in LIVE atMs = now -> latest.
-  let idx = track.length - 1;
-  for (let i = 0; i < track.length; i++) { if (track[i].time > atMs) { idx = i-1; break; } }
-  if (idx < 0) idx = 0;
-
-  let pos;
-  if (idx >= track.length - 1) pos = { ...track[track.length-1] };
-  else {
-    const a = track[idx], b = track[idx+1];
-    const f = (atMs - a.time) / Math.max(1, (b.time - a.time));
-    pos = { lat: a.lat+(b.lat-a.lat)*f, lng: a.lng+(b.lng-a.lng)*f,
-            speed: b.speed, course: b.course, time: atMs };
-  }
+  if (!track || !track.length) return { empty: true };
 
   const latest = track[track.length-1];
   const ageMin = (Date.now() - latest.time) / 60000;
   const distHome = haversineKm(latest, h.home) * KM_TO_MI;
-  const distBase = haversineKm(latest, CLARKSTON) * KM_TO_MI;
 
-  // miles logged across the trail
-  let miles = 0;
-  for (let i = 1; i < track.length; i++) miles += haversineKm(track[i-1], track[i]);
+  let miles = 0, farthest = 0;
+  for (let i = 0; i < track.length; i++) {
+    if (i > 0) miles += haversineKm(track[i-1], track[i]);
+    const d = haversineKm(track[i], h.home);
+    if (d > farthest) farthest = d;
+  }
   miles *= KM_TO_MI;
+  farthest *= KM_TO_MI;
 
   let state;
   if (ageMin > STALE_MINUTES) state = 'NOTHEARD';
@@ -959,8 +984,7 @@ function deriveHost(h, atMs) {
   else if (haversineKm(latest, h.home) < HOME_RADIUS_KM) state = 'HOME';
   else state = 'PARKED';
 
-  const fresh = ageMin <= FRESH_MINUTES;
-  return { empty: false, pos, latest, ageMin, distHome, distBase, miles, state, fresh };
+  return { empty: false, latest, ageMin, distHome, miles, farthest, state };
 }
 
 function stateLabel(s) {
@@ -969,119 +993,106 @@ function stateLabel(s) {
 function ageText(min) {
   if (min < 1) return 'Heard just now';
   if (min < 60) return 'Heard ' + Math.round(min) + ' min ago';
-  const hr = Math.floor(min/60), m = Math.round(min%60);
-  return 'Heard ' + hr + 'h ' + (m ? m + 'm ' : '') + 'ago';
+  const hr = Math.floor(min/60);
+  if (hr < 24) {
+    const m = Math.round(min%60);
+    return 'Heard ' + hr + 'h ' + (m ? m + 'm ' : '') + 'ago';
+  }
+  const d = Math.floor(hr/24), rh = hr%24;
+  return 'Heard ' + d + 'd ' + (rh ? rh + 'h ' : '') + 'ago';
 }
 
 /* ============================================================
-   RENDER LOOP (requestAnimationFrame) - drawing only.
-   Data, clock, ages and mode switching live on the master tick.
+   RENDER LOOP  -  always-visible age-graded trails + traveling pulse
    ============================================================ */
+function ll(p) { return map.latLngToContainerPoint([p.lat, p.lng]); }
+
 function renderLoop(nowMs) {
-  const dt = Math.min(0.1, (nowMs - lastFrameMs) / 1000);
-  lastFrameMs = nowMs;
-
-  // mode scheduler advances in real time every frame (cheap)
-  const prevMode = mode;
-  modeElapsed += dt;
-  if (mode === 'LIVE' && modeElapsed >= LIVE_SECONDS) { mode = 'REPLAY'; modeElapsed = 0; }
-  else if (mode === 'REPLAY' && modeElapsed >= REPLAY_SECONDS) { mode = 'LIVE'; modeElapsed = 0; }
-  if (mode !== prevMode) needsRedraw = true;
-
-  // cap the actual drawing to RENDER_FPS
   if (nowMs - lastDrawMs >= FRAME_MIN_MS) {
     lastDrawMs = nowMs;
-
-    let atMs, replayFrac = 0;
-    const now = Date.now();
-    if (mode === 'LIVE') {
-      atMs = now;
-    } else {
-      replayFrac = modeElapsed / REPLAY_SECONDS;
-      atMs = (now - TRAIL_HOURS*3600*1000) + replayFrac * TRAIL_HOURS*3600*1000;
-    }
-
-    // In LIVE the positions are fixed between polls, so only repaint when data
-    // changed, the mode flipped, or a ripple is still animating. REPLAY always
-    // paints (throttled). This keeps the canvas idle most of the time.
-    const mustDraw = (mode === 'REPLAY') || needsRedraw || ripples.length > 0;
-    if (mustDraw) {
-      drawTrails(atMs);
-      drawAvatars(atMs);
-      if (mode === 'LIVE') needsRedraw = false;
-    }
-    updateModeUI(replayFrac);
+    drawTrails();
+    drawAvatars();
   }
-
   requestAnimationFrame(renderLoop);
 }
 
-function ll(p) { return map.latLngToContainerPoint([p.lat, p.lng]); }
-
-function nightFactor(ms) {
-  const hr = new Date(ms).getHours();   // display-local hour
-  return (hr >= DAY_START_HR && hr < DAY_END_HR) ? 1 : NIGHT_DIM;
-}
-
-function drawTrails(atMs) {
+function drawTrails() {
   const w = trailCanvas.clientWidth, h = trailCanvas.clientHeight;
   ctx.clearRect(0, 0, w, h);
+  const now = Date.now();
+  const windowMs = TRAIL_HOURS * 3600 * 1000;
 
   hosts.forEach(host => {
-    const pts = host.track.filter(p => p.time <= atMs);
-    if (pts.length < 2) return;
-    const headTime = pts[pts.length-1].time;
-    const oldest = pts[0].time;
-    const span = Math.max(1, headTime - oldest);
+    const pts = host.track;
+    if (!pts || pts.length < 2) return;
 
-    // single stroke pass with per-segment fade (no per-frame blur, which is
-    // the expensive part on low-power GPUs)
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.lineWidth = TRAIL_WIDTH;
-    for (let i = 1; i < pts.length; i++) {
-      const a = ll(pts[i-1]), b = ll(pts[i]);
-      const along = (pts[i].time - oldest) / span;   // 0 tail -> 1 head
-      const fade = Math.pow(along, 1.4);             // bias brightness to head
-      const nf = nightFactor(pts[i].time);
-      const alpha = 0.92 * fade * nf;
-      if (alpha < 0.02) continue;
-      ctx.strokeStyle = hexA(host.color, alpha);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    }
-    // head: a soft halo plus a solid core, both plain fills (no shadowBlur)
-    const head = ll(pts[pts.length-1]);
-    ctx.beginPath(); ctx.fillStyle = hexA(host.color, 0.25);
-    ctx.arc(head.x, head.y, 9, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.fillStyle = hexA(host.color, 0.95);
-    ctx.arc(head.x, head.y, 4.5, 0, Math.PI*2); ctx.fill();
-  });
+    // project once per frame
+    const proj = pts.map(p => ll(p));
 
-  drawRipples();
-}
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-function spawnRipple(p, color) { ripples.push({ x: p.x, y: p.y, color, born: performance.now() }); }
-function drawRipples() {
-  const life = 1600;
-  const now = performance.now();
-  ripples = ripples.filter(r => now - r.born < life);
-  ripples.forEach(r => {
-    const t = (now - r.born) / life;
-    const radius = 6 + t*34;
+    // pass 1: identity casing in the host's signature color
+    ctx.strokeStyle = hexA(host.color, CASING_ALPHA);
+    ctx.lineWidth = CASING_WIDTH;
     ctx.beginPath();
-    ctx.strokeStyle = hexA(r.color, (1-t)*0.6);
-    ctx.lineWidth = 2;
-    ctx.arc(r.x, r.y, radius, 0, Math.PI*2); ctx.stroke();
+    ctx.moveTo(proj[0].x, proj[0].y);
+    for (let i = 1; i < proj.length; i++) ctx.lineTo(proj[i].x, proj[i].y);
+    ctx.stroke();
+
+    // pass 2: age-colored core (green now -> amber -> red at 72h)
+    ctx.lineWidth = TRAIL_WIDTH;
+    for (let i = 1; i < proj.length; i++) {
+      const t = Math.min(1, (now - pts[i].time) / windowMs);
+      ctx.strokeStyle = ageColor(t, 0.95);
+      ctx.beginPath();
+      ctx.moveTo(proj[i-1].x, proj[i-1].y);
+      ctx.lineTo(proj[i].x, proj[i].y);
+      ctx.stroke();
+    }
+
+    // midnight ticks: small cream dots where the local day rolls over
+    if (MIDNIGHT_TICKS) {
+      ctx.fillStyle = 'rgba(253,248,229,0.85)';
+      let prevDay = new Date(pts[0].time).getDate();
+      for (let i = 1; i < pts.length; i++) {
+        const d = new Date(pts[i].time).getDate();
+        if (d !== prevDay) {
+          ctx.beginPath();
+          ctx.arc(proj[i].x, proj[i].y, 3, 0, Math.PI*2);
+          ctx.fill();
+          prevDay = d;
+        }
+      }
+    }
+
+    // traveling pulse: a bright dot running tail -> head, offset per host
+    const hostOffset = (host.call.charCodeAt(0) % 7) / 7;
+    const tt = ((performance.now()/1000 / PULSE_PERIOD_S) + hostOffset) % 1;
+    const fi = tt * (proj.length - 1);
+    const i0 = Math.floor(fi), f = fi - i0;
+    const i1 = Math.min(i0 + 1, proj.length - 1);
+    const px = proj[i0].x + (proj[i1].x - proj[i0].x) * f;
+    const py = proj[i0].y + (proj[i1].y - proj[i0].y) * f;
+    ctx.beginPath();
+    ctx.fillStyle = hexA(host.color, 0.30);
+    ctx.arc(px, py, 8, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(253,248,229,0.95)';
+    ctx.arc(px, py, 3.2, 0, Math.PI*2); ctx.fill();
+
+    // head: soft halo + solid core in host color (plain fills, no shadowBlur)
+    const head = proj[proj.length - 1];
+    ctx.beginPath(); ctx.fillStyle = hexA(host.color, 0.25);
+    ctx.arc(head.x, head.y, 10, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.fillStyle = hexA(host.color, 0.95);
+    ctx.arc(head.x, head.y, 5, 0, Math.PI*2); ctx.fill();
   });
 }
 
-function hexA(hex, a) {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
-}
-
-/* ---------- avatars ---------- */
+/* ---------- avatars (always at the latest position) ---------- */
 const markerEls = {};
-function drawAvatars(atMs) {
+function drawAvatars() {
   hosts.forEach(host => {
     let el = markerEls[host.call];
     if (!el) {
@@ -1098,91 +1109,57 @@ function drawAvatars(atMs) {
       avatarLayer.appendChild(el);
       markerEls[host.call] = el;
     }
-    const d = deriveHost(host, atMs);
+    const d = deriveHost(host);
     if (d.empty) { el.style.display = 'none'; return; }
     el.style.display = '';
 
-    const pt = ll(d.pos);
+    const pt = ll(d.latest);
     el.style.transform = `translate3d(${pt.x}px, ${pt.y}px, 0)`;
-    el.querySelector('.host-beam').style.setProperty('--course', (d.pos.course||0) + 'deg');
+    el.querySelector('.host-beam').style.setProperty('--course', (d.latest.course||0) + 'deg');
 
-    // pose reflects what the avatar is doing at this instant (so REPLAY
-    // shows driving on drive legs, home when parked at home, etc.)
-    const dispState = (d.state === 'NOTHEARD') ? 'NOTHEARD'
-      : (d.pos.speed > MOVING_SPEED_KMH ? 'ROLLING'
-         : (haversineKm(d.pos, host.home) < HOME_RADIUS_KM ? 'HOME' : 'PARKED'));
-    setPose(el.querySelector('.host-avatar'), poseFor(host, dispState));
+    setPose(el.querySelector('.host-avatar'), poseFor(host, d.state));
 
-    const moving = d.pos.speed > MOVING_SPEED_KMH;
-    el.classList.toggle('rolling', moving);
-    el.classList.toggle('fresh', d.fresh && !moving);
+    el.classList.toggle('rolling', d.state === 'ROLLING');
     el.classList.toggle('dim', d.state === 'NOTHEARD');
-
-    // fresh-beacon ripple in LIVE only
-    if (mode === 'LIVE' && d.fresh) {
-      if (!host._lastRipple || performance.now() - host._lastRipple > 2600) {
-        spawnRipple(pt, host.color); host._lastRipple = performance.now();
-      }
-    }
   });
 }
 
-function updateModeUI(replayFrac) {
-  const badge = document.getElementById('modeBadge');
-  const bar = document.getElementById('replayBar');
-  if (mode === 'LIVE') {
-    badge.className = 'mode-badge live';
-    document.getElementById('modeText').textContent = 'Live';
-    bar.classList.remove('show');
-  } else {
-    badge.className = 'mode-badge replay';
-    document.getElementById('modeText').textContent = 'Replay';
-    bar.classList.add('show');
-    document.getElementById('replayFill').style.width = (replayFrac*100).toFixed(1) + '%';
-  }
-}
-
 /* ============================================================
-   MASTER TICK - clock, ages, card text, poll, stale badge
+   MASTER TICK  -  clock, cards, footer, poll
    ============================================================ */
 function masterTick() {
   tickCount++;
 
-  // clock
   const now = new Date();
-  const u = now;
-  const zz = String(u.getUTCHours()).padStart(2,'0') + ':' +
-             String(u.getUTCMinutes()).padStart(2,'0') + ':' +
-             String(u.getUTCSeconds()).padStart(2,'0');
+  const zz = String(now.getUTCHours()).padStart(2,'0') + ':' +
+             String(now.getUTCMinutes()).padStart(2,'0') + ':' +
+             String(now.getUTCSeconds()).padStart(2,'0');
   document.getElementById('zulu').innerHTML = zz + '<span class="z">Z</span>';
   document.getElementById('local').textContent =
     now.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }) + '  ' +
     now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
 
-  // card fields (LIVE-truth values, independent of replay sweep)
   hosts.forEach(host => {
     const card = document.getElementById('card-' + host.call);
     if (!card) return;
-    const d = deriveHost(host, Date.now());
+    const d = deriveHost(host);
     if (d.empty) return;
-    card.className = 'card' + (d.state==='NOTHEARD' ? ' notheard' : '') + (d.fresh ? ' fresh' : '');
+    card.className = 'card' + (d.state==='NOTHEARD' ? ' notheard' : '');
     card.style.setProperty('--hc', host.color);
 
     const pill = card.querySelector('[data-state]');
     pill.className = 'state-pill state-' + d.state;
-    card.querySelector('[data-statetext]').textContent = stateLabel(d.state);
+    const city = nearestCity(d.latest);
+    card.querySelector('[data-statetext]').textContent =
+      d.state === 'ROLLING' ? 'Rolling \u00b7 ' + city : city;
     card.querySelector('[data-heard]').textContent = ageText(d.ageMin);
     setPose(card.querySelector('.avatar'), poseFor(host, d.state));
 
-    const mph = d.latest.speed * KM_TO_MI;
-    card.querySelector('[data-speed]').innerHTML = d.state==='ROLLING'
-      ? Math.round(mph) + '<small>mph ' + compass(d.latest.course) + '</small>'
-      : '0<small>mph</small>';
-    card.querySelector('[data-dist]').innerHTML = d.distBase.toFixed(1) + '<small>mi</small>';
     card.querySelector('[data-miles]').innerHTML = d.miles.toFixed(1) + '<small>mi</small>';
+    card.querySelector('[data-far]').innerHTML   = d.farthest.toFixed(1) + '<small>mi</small>';
+    card.querySelector('[data-dist]').innerHTML  = d.distHome.toFixed(1) + '<small>mi</small>';
   });
 
-  // footer + stale badge
   const ageMin = (Date.now() - dataGeneratedMs) / 60000;
   document.getElementById('srcText').textContent = sourceLabel;
   document.getElementById('updated').textContent =
@@ -1200,6 +1177,7 @@ async function boot() {
   initMap();
   await loadData();
   frameBounds();
+  lastFitSig = fitSignature();
   masterTick();
   setInterval(masterTick, MASTER_TICK_MS);
   requestAnimationFrame(renderLoop);
