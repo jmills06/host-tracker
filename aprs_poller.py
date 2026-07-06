@@ -27,8 +27,8 @@ from pathlib import Path
 API_KEY  = os.environ.get("APRS_API_KEY", "").strip()
 OUT_FILE = Path(os.environ.get("OUT_FILE", "host-tracker.json"))
 
-TRAIL_HOURS = 24
-MAX_POINTS  = 800
+TRAIL_HOURS = 72
+MAX_POINTS  = 1500
 
 # id    = the key the board matches on (use the base callsign).
 # watch = the APRS SSIDs to follow and merge for that person (moving radios only).
