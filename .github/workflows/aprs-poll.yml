@@ -17,9 +17,9 @@ jobs:
   poll:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -29,14 +29,31 @@ jobs:
           OUT_FILE: host-tracker.json
         run: python aprs_poller.py
 
-      - name: Commit if changed
+      - name: Commit and push (resilient to concurrent updates)
         run: |
-          if [[ -n "$(git status --porcelain host-tracker.json)" ]]; then
-            git config user.name  "aprs-bot"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add host-tracker.json
-            git commit -m "aprs: update host positions [skip ci]"
-            git push
-          else
-            echo "no change this run"
+          if [[ -z "$(git status --porcelain host-tracker.json)" ]]; then
+            echo "no change this run"; exit 0
           fi
+          git config user.name  "aprs-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # keep our freshly generated file, then always rebuild the commit
+          # on top of the very latest main so a moving remote can't reject us
+          cp host-tracker.json /tmp/host-tracker.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/host-tracker.json host-tracker.json
+            git add host-tracker.json
+            if git diff --cached --quiet; then
+              echo "remote already up to date"; exit 0
+            fi
+            git commit -m "aprs: update host positions [skip ci]"
+            if git push origin HEAD:main; then
+              echo "pushed"; exit 0
+            fi
+            echo "push rejected (attempt $i), re-syncing and retrying"
+            sleep 2
+          done
+          echo "push failed after retries" >&2
+          exit 1
