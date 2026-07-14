@@ -296,7 +296,7 @@
   .age-bar {
     height: 8px;
     border-radius: 4px;
-    background: linear-gradient(90deg, #2ecc71 0%, #f39c12 50%, #e74c3c 100%);
+    background: linear-gradient(90deg, rgba(253,248,229,0.95) 0%, rgba(253,248,229,0.10) 100%);
   }
   .age-ends {
     display: flex;
@@ -520,11 +520,9 @@ const CASING_WIDTH = 9;        // host-color identity casing under the core
 const CASING_ALPHA = 0.30;
 const PULSE_PERIOD_S = 14;     // seconds for the traveling pulse to run a trail
 const MIDNIGHT_TICKS = true;   // small cream dots at each local midnight
-
-// Trail age colors: fresh -> mid -> old  (matches the on-map legend)
-const AGE_FRESH = '#2ecc71';
-const AGE_MID   = '#f39c12';
-const AGE_OLD   = '#e74c3c';
+const TRAIL_OFFSET_PX = 7;     // sideways separation between hosts' trails so
+                               // shared roads render as parallel ribbons
+                               // (transit-map style). 0 disables.
 
 const MODE_PALETTE = ['#ff7030', '#4a90e2', '#9b59b6', '#2ecc71'];
 
@@ -637,23 +635,6 @@ function hexToRgb(hex) {
 }
 function rgba(rgb, a) { return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`; }
 function hexA(hex, a) { return rgba(hexToRgb(hex), a); }
-
-const AGE_FRESH_RGB = hexToRgb(AGE_FRESH);
-const AGE_MID_RGB   = hexToRgb(AGE_MID);
-const AGE_OLD_RGB   = hexToRgb(AGE_OLD);
-
-// t: 0 = now (green) -> 1 = TRAIL_HOURS old (red), via amber at the middle
-function ageColor(t, alpha) {
-  t = Math.min(1, Math.max(0, t));
-  let a, b, f;
-  if (t < 0.5) { a = AGE_FRESH_RGB; b = AGE_MID_RGB; f = t / 0.5; }
-  else         { a = AGE_MID_RGB;   b = AGE_OLD_RGB; f = (t - 0.5) / 0.5; }
-  return rgba([
-    Math.round(a[0] + (b[0]-a[0])*f),
-    Math.round(a[1] + (b[1]-a[1])*f),
-    Math.round(a[2] + (b[2]-a[2])*f),
-  ], alpha);
-}
 
 /* ============================================================
    SIMULATED DATA  (72h)
@@ -1009,6 +990,41 @@ function ageText(min) {
    ============================================================ */
 function ll(p) { return map.latLngToContainerPoint([p.lat, p.lng]); }
 
+// Shift a projected polyline sideways by `off` pixels, using the averaged
+// normals of adjacent segments so corners stay joined (transit-map offset).
+function offsetPolyline(proj, off) {
+  if (!off || proj.length < 2) return proj;
+  const n = proj.length;
+  const segNx = [], segNy = [];
+  for (let i = 0; i < n - 1; i++) {
+    const dx = proj[i+1].x - proj[i].x, dy = proj[i+1].y - proj[i].y;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.0001) { segNx.push(null); segNy.push(null); }
+    else { segNx.push(-dy/len); segNy.push(dx/len); }
+  }
+  // fill degenerate segments with a neighbor's normal
+  let lastX = 0, lastY = -1;
+  for (let i = 0; i < n - 1; i++) {
+    if (segNx[i] === null) { segNx[i] = lastX; segNy[i] = lastY; }
+    else { lastX = segNx[i]; lastY = segNy[i]; }
+  }
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) {
+    let nx, ny;
+    if (i === 0)          { nx = segNx[0];   ny = segNy[0]; }
+    else if (i === n - 1) { nx = segNx[n-2]; ny = segNy[n-2]; }
+    else {
+      nx = segNx[i-1] + segNx[i];
+      ny = segNy[i-1] + segNy[i];
+      const len = Math.hypot(nx, ny);
+      if (len < 0.0001) { nx = segNx[i]; ny = segNy[i]; }
+      else { nx /= len; ny /= len; }
+    }
+    out[i] = { x: proj[i].x + nx*off, y: proj[i].y + ny*off };
+  }
+  return out;
+}
+
 function renderLoop(nowMs) {
   if (nowMs - lastDrawMs >= FRAME_MIN_MS) {
     lastDrawMs = nowMs;
@@ -1024,33 +1040,36 @@ function drawTrails() {
   const now = Date.now();
   const windowMs = TRAIL_HOURS * 3600 * 1000;
 
-  hosts.forEach(host => {
+  hosts.forEach((host, hi) => {
     const pts = host.track;
     if (!pts || pts.length < 2) return;
 
-    // project once per frame
-    const proj = pts.map(p => ll(p));
+    // project once per frame, then shift sideways per host so overlapping
+    // routes render as parallel ribbons instead of stacking
+    const off = (hi - (hosts.length - 1) / 2) * TRAIL_OFFSET_PX;
+    const proj = offsetPolyline(pts.map(p => ll(p)), off);
 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // pass 1: identity casing in the host's signature color
-    ctx.strokeStyle = hexA(host.color, CASING_ALPHA);
-    ctx.lineWidth = CASING_WIDTH;
-    ctx.beginPath();
-    ctx.moveTo(proj[0].x, proj[0].y);
-    for (let i = 1; i < proj.length; i++) ctx.lineTo(proj[i].x, proj[i].y);
-    ctx.stroke();
-
-    // pass 2: age-colored core (green now -> amber -> red at 72h)
-    ctx.lineWidth = TRAIL_WIDTH;
-    for (let i = 1; i < proj.length; i++) {
-      const t = Math.min(1, (now - pts[i].time) / windowMs);
-      ctx.strokeStyle = ageColor(t, 0.95);
-      ctx.beginPath();
-      ctx.moveTo(proj[i-1].x, proj[i-1].y);
-      ctx.lineTo(proj[i].x, proj[i].y);
-      ctx.stroke();
+    // Host-colored trail; age is expressed as fade + taper.
+    // Fresh segments are bright and full width, 72h-old segments are
+    // thin and nearly transparent. Two passes: soft glow, then core.
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 1; i < proj.length; i++) {
+        const t = Math.min(1, (now - pts[i].time) / windowMs);  // 0 fresh -> 1 old
+        const fade = Math.pow(1 - t, 1.15);
+        const alpha = (pass === 0 ? CASING_ALPHA : 0.95) * fade;
+        if (alpha < 0.02) continue;
+        ctx.strokeStyle = hexA(host.color, alpha);
+        ctx.lineWidth = pass === 0
+          ? CASING_WIDTH
+          : (TRAIL_WIDTH * (0.55 + 0.45 * fade));
+        ctx.beginPath();
+        ctx.moveTo(proj[i-1].x, proj[i-1].y);
+        ctx.lineTo(proj[i].x, proj[i].y);
+        ctx.stroke();
+      }
     }
 
     // midnight ticks: small cream dots where the local day rolls over
