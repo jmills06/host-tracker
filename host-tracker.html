@@ -357,7 +357,7 @@
 
   .card .metrics {
     display: flex;
-    gap: 26px;
+    gap: 22px;
     align-items: center;
     text-align: right;
   }
@@ -509,6 +509,10 @@ const DATA_STALE_MIN = 20;     // snapshot older than this -> footer stale badge
 // Classification
 const MOVING_SPEED_KMH = 8;    // above this a station is ROLLING
 const HOME_RADIUS_KM   = 0.4;  // within this of `home` -> HOME (else PARKED)
+const ROLL_GAP_CAP_MIN = 20;   // max minutes one moving beacon can add to
+                               // "time rolling" (guards against sparse gaps)
+const SPEED_SANITY_KMH = 200;  // ignore beacons above this for Top speed
+                               // (corrupt APRS packets happen)
 
 // Display units
 const KM_TO_MI = 0.621371;
@@ -905,8 +909,9 @@ function buildCards() {
       <div class="metrics">
         <div class="metric"><div class="state-pill" data-state><span class="sd"></span><span data-statetext>--</span></div></div>
         <div class="metric"><div class="val" data-miles>--</div><div class="lbl">Miles / 3 days</div></div>
-        <div class="metric"><div class="val" data-far>--</div><div class="lbl">Farthest out</div></div>
-        <div class="metric"><div class="val" data-dist>--</div><div class="lbl">From home</div></div>
+        <div class="metric"><div class="val" data-roll>--</div><div class="lbl">Time rolling</div></div>
+        <div class="metric"><div class="val" data-top>--</div><div class="lbl">Top speed</div></div>
+        <div class="metric"><div class="val" data-beacons>--</div><div class="lbl">Beacons</div></div>
       </div>`;
     wrap.appendChild(c);
   });
@@ -950,16 +955,26 @@ function deriveHost(h) {
 
   const latest = track[track.length-1];
   const ageMin = (Date.now() - latest.time) / 60000;
-  const distHome = haversineKm(latest, h.home) * KM_TO_MI;
 
-  let miles = 0, farthest = 0;
+  let miles = 0, rollMs = 0, topKmh = 0;
   for (let i = 0; i < track.length; i++) {
-    if (i > 0) miles += haversineKm(track[i-1], track[i]);
-    const d = haversineKm(track[i], h.home);
-    if (d > farthest) farthest = d;
+    if (i > 0) {
+      miles += haversineKm(track[i-1], track[i]);
+      // time rolling: the beacon says we arrived here moving, so count the
+      // gap since the previous beacon, capped so sparse gaps can't inflate it
+      if (track[i].speed > MOVING_SPEED_KMH) {
+        rollMs += Math.min(track[i].time - track[i-1].time,
+                           ROLL_GAP_CAP_MIN * 60000);
+      }
+    }
+    if (track[i].speed > topKmh && track[i].speed <= SPEED_SANITY_KMH) {
+      topKmh = track[i].speed;
+    }
   }
   miles *= KM_TO_MI;
-  farthest *= KM_TO_MI;
+  const rollH   = rollMs / 3600000;
+  const topMph  = topKmh * KM_TO_MI;
+  const beacons = track.length;
 
   let state;
   if (ageMin > STALE_MINUTES) state = 'NOTHEARD';
@@ -967,7 +982,7 @@ function deriveHost(h) {
   else if (haversineKm(latest, h.home) < HOME_RADIUS_KM) state = 'HOME';
   else state = 'PARKED';
 
-  return { empty: false, latest, ageMin, distHome, miles, farthest, state };
+  return { empty: false, latest, ageMin, miles, rollH, topMph, beacons, state };
 }
 
 function stateLabel(s) {
@@ -1177,8 +1192,11 @@ function masterTick() {
     setPose(card.querySelector('.avatar'), poseFor(host, d.state));
 
     card.querySelector('[data-miles]').innerHTML = d.miles.toFixed(1) + '<small>mi</small>';
-    card.querySelector('[data-far]').innerHTML   = d.farthest.toFixed(1) + '<small>mi</small>';
-    card.querySelector('[data-dist]').innerHTML  = d.distHome.toFixed(1) + '<small>mi</small>';
+    card.querySelector('[data-roll]').innerHTML = d.rollH >= 1
+      ? d.rollH.toFixed(1) + '<small>h</small>'
+      : Math.round(d.rollH * 60) + '<small>m</small>';
+    card.querySelector('[data-top]').innerHTML = Math.round(d.topMph) + '<small>mph</small>';
+    card.querySelector('[data-beacons]').innerHTML = d.beacons + '<small>rx</small>';
   });
 
   const ageMin = (Date.now() - dataGeneratedMs) / 60000;
