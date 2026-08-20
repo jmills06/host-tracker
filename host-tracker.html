@@ -236,27 +236,6 @@
   }
 
   /* ---------- Map overlays ---------- */
-  .map-legend {
-    position: absolute;
-    left: 16px; top: 16px;
-    z-index: 402;
-    background: rgba(13,22,32,0.9);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 12px;
-    padding: 12px 14px;
-  }
-  .map-legend .lh {
-    font-family: 'Oswald', sans-serif;
-    font-size: 13px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--orange);
-    margin-bottom: 8px;
-  }
-  .legend-row { display: flex; align-items: center; gap: 9px; margin: 5px 0; }
-  .legend-dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px var(--d); background: var(--d); }
-  .legend-name { font-family: 'Oswald', sans-serif; font-weight: 500; font-size: 16px; letter-spacing: 0.5px; }
-  .legend-call { font-size: 12px; color: var(--cream-50); letter-spacing: 0.5px; }
 
   .window-badge {
     position: absolute;
@@ -446,10 +425,6 @@
     <canvas id="trails"></canvas>
     <div id="avatars"></div>
 
-    <div class="map-legend" id="legend">
-      <div class="lh">On the air</div>
-    </div>
-
     <div class="window-badge">Last <b>72</b> hours</div>
 
     <div class="age-legend">
@@ -489,7 +464,7 @@ const HOSTS = [
     home: { lat: 42.7356, lng: -83.4183 },                          // Clarkston
     poses: { home: 'icons/james-home.png', portable: 'icons/james-portable.png', mobile: 'icons/james-mobile.png' } },
 
-  { call: 'N8JRD', name: 'Jim', color: '#e74c3c', initials: 'JI',
+  { call: 'N8JRD', name: 'Jim', color: '#ff7030', initials: 'JI',
     home: { lat: 42.4606, lng: -83.6516 },                          // South Lyon
     poses: { home: 'icons/jim-home.png', portable: 'icons/jim-portable.png', mobile: 'icons/jim-mobile.png' } },
 
@@ -791,7 +766,6 @@ function applyData(data) {
   sourceLabel = data.source || sourceLabel;
 
   if (sig !== lastSignature) {
-    buildLegend();
     buildCards();
     lastSignature = sig;
   }
@@ -875,22 +849,8 @@ function frameBounds() {
 }
 
 /* ============================================================
-   LEGEND + CARDS
+   CARDS
    ============================================================ */
-function buildLegend() {
-  const el = document.getElementById('legend');
-  el.innerHTML = '<div class="lh">On the air</div>';
-  hosts.forEach(h => {
-    const row = document.createElement('div');
-    row.className = 'legend-row';
-    row.style.setProperty('--d', h.color);
-    row.innerHTML = `<span class="legend-dot"></span>
-      <span><span class="legend-name">${h.call}</span>
-      <span class="legend-call"> ${h.name}</span></span>`;
-    el.appendChild(row);
-  });
-}
-
 function buildCards() {
   const wrap = document.getElementById('cards');
   wrap.innerHTML = '';
