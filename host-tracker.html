@@ -323,6 +323,19 @@
   .card .avatar:not(.imgloaded) img.pose { display: none; }
   .card .avatar.imgloaded .ini { display: none; }
   .card.notheard .avatar { filter: grayscale(0.35); opacity: 0.82; box-shadow: 0 0 14px rgba(0,0,0,0.4); }
+  /* No beacons at all in the window, so there is no position to derive a
+     pose from. Show the host's home portrait, dimmed well past 'notheard',
+     so the card reads as quiet rather than broken. */
+  .card.nodata { border-left-color: var(--cream-30); }
+  .card.nodata .avatar {
+    filter: grayscale(1) brightness(0.62);
+    opacity: 0.36;
+    border-color: var(--cream-30);
+    box-shadow: none;
+  }
+  /* Border is currentColor, so this mutes the ring with the text. Without it
+     the pill outshines the live hosts' pills on the quietest card. */
+  .card.nodata .state-pill { color: var(--cream-50); }
   .card .who { min-width: 0; }
   .card .call {
     font-family: 'Oswald', sans-serif;
@@ -1139,7 +1152,24 @@ function masterTick() {
     const card = document.getElementById('card-' + host.call);
     if (!card) return;
     const d = deriveHost(host);
-    if (d.empty) return;
+    if (d.empty) {
+      // Nothing heard in the whole window. Keep the metrics as dashes -- there
+      // genuinely is no data -- but show the dimmed home pose so the host is
+      // still recognisable on the board.
+      card.className = 'card nodata';
+      card.style.setProperty('--hc', host.color);
+      setPose(card.querySelector('.avatar'), poseFor(host, 'NODATA'));
+      // Reset the readouts: a host can go from having a trail to having none
+      // when the window rolls past their last beacon, and stale numbers under
+      // a dimmed portrait would read as current.
+      card.querySelector('[data-state]').className = 'state-pill';
+      card.querySelector('[data-statetext]').textContent = 'No beacons';
+      card.querySelector('[data-heard]').textContent =
+        'Not heard in ' + TRAIL_HOURS + 'h';
+      ['[data-miles]','[data-roll]','[data-top]','[data-beacons]']
+        .forEach(sel => { card.querySelector(sel).textContent = '\u2014'; });
+      return;
+    }
     card.className = 'card' + (d.state==='NOTHEARD' ? ' notheard' : '');
     card.style.setProperty('--hc', host.color);
 
