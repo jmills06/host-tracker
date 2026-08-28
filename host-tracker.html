@@ -518,11 +518,37 @@ const TRAIL_OFFSET_PX = 7;     // sideways separation between hosts' trails so
 
 const MODE_PALETTE = ['#ff7030', '#4a90e2', '#9b59b6', '#2ecc71'];
 
-// Basemap. Voyager is light and readable (same as the POTA boards).
-// Alternatives (all free, no API key):
-//   Positron (neutral light grey): https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png
-const MAP_TILES  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-const MAP_ATTRIB = '&copy; OpenStreetMap &copy; CARTO';
+// Basemap.
+// CARTO's raster basemaps are no longer anonymous: unkeyed tiles come back
+// stamped with a diagonal "API KEY REQUIRED" watermark. A key is free (no
+// CARTO account needed, ~5M tiles/month) from https://carto.com/basemaps/apikey/
+// -- request one and paste it below. The key travels in the tile URL, so it is
+// public by nature; there is nothing to protect here.
+// Leave it blank and the board quietly falls back to BASEMAP_NO_KEY, so it
+// never shows the watermark.
+const CARTO_API_KEY = '';
+
+const BASEMAPS = {
+  // Light and readable, same as the POTA boards. Needs the key above.
+  'carto-voyager':  { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                      attrib: '&copy; OpenStreetMap &copy; CARTO',
+                      opts: { subdomains: 'abcd', maxZoom: 20 }, needsKey: true },
+  // Neutral light grey. Needs the key above.
+  'carto-positron': { url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                      attrib: '&copy; OpenStreetMap &copy; CARTO',
+                      opts: { subdomains: 'abcd', maxZoom: 20 }, needsKey: true },
+  // Keyless. Standard OSM carto -- busier than Voyager but always available.
+  'osm':            { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      attrib: '&copy; OpenStreetMap contributors',
+                      opts: { maxZoom: 19 } },
+  // Keyless. Muted grey canvas, closest in feel to Positron; labels thin out
+  // past z16 (Esri stops serving this layer above 16).
+  'esri-gray':      { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+                      attrib: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+                      opts: { maxZoom: 16 } }
+};
+const BASEMAP        = 'carto-voyager';  // used once CARTO_API_KEY is filled in
+const BASEMAP_NO_KEY = 'esri-gray';      // used while it is blank
 
 // Auto-zoom: tightest zoom that fits the chosen content.
 const FIT_MODE          = 'trails'; // 'trails' = whole 72h paths stay on screen.
@@ -792,6 +818,21 @@ function applyData(data) {
 /* ============================================================
    MAP
    ============================================================ */
+// Builds the tile layer for BASEMAP, falling back to BASEMAP_NO_KEY when the
+// chosen style needs a CARTO key we do not have.
+function baseLayer() {
+  let name = BASEMAPS[BASEMAP] ? BASEMAP : BASEMAP_NO_KEY;
+  if (BASEMAPS[name].needsKey && !CARTO_API_KEY) {
+    console.warn('Basemap "' + name + '" needs a CARTO API key ' +
+                 '(free at https://carto.com/basemaps/apikey/); ' +
+                 'falling back to "' + BASEMAP_NO_KEY + '".');
+    name = BASEMAP_NO_KEY;
+  }
+  const b = BASEMAPS[name];
+  const url = b.needsKey ? b.url + '?key=' + encodeURIComponent(CARTO_API_KEY) : b.url;
+  return L.tileLayer(url, Object.assign({ attribution: b.attrib }, b.opts));
+}
+
 function initMap() {
   map = L.map('map', {
     zoomControl: false, attributionControl: true,
@@ -799,10 +840,7 @@ function initMap() {
     boxZoom: false, keyboard: false, touchZoom: false, tap: false,
     inertia: false, zoomSnap: 0.1
   });
-  L.tileLayer(MAP_TILES, {
-    subdomains: 'abcd', maxZoom: 19,
-    attribution: MAP_ATTRIB
-  }).addTo(map);
+  baseLayer().addTo(map);
 
   trailCanvas = document.getElementById('trails');
   ctx = trailCanvas.getContext('2d');
