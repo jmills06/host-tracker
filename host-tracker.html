@@ -235,6 +235,11 @@
     white-space: nowrap;
   }
 
+  /* Glyph badges tie a host's map marker to their name. */
+  .glyph { vertical-align: -1px; margin-right: 6px; }
+  .card .call .glyph { vertical-align: -2px; margin-right: 9px; }
+  .host-marker.dim .glyph { opacity: 0.7; }
+
   /* ---------- Map overlays ---------- */
 
   .window-badge {
@@ -275,7 +280,9 @@
   .age-bar {
     height: 8px;
     border-radius: 4px;
-    background: linear-gradient(90deg, rgba(253,248,229,0.95) 0%, rgba(253,248,229,0.10) 100%);
+    /* End stop tracks TRAIL_ALPHA_OLD / TRAIL_ALPHA_FRESH, so the legend
+       shows the fade the trails actually use. */
+    background: linear-gradient(90deg, rgba(253,248,229,0.95) 0%, rgba(253,248,229,0.42) 100%);
   }
   .age-ends {
     display: flex;
@@ -473,15 +480,15 @@ const CLARKSTON = { lat: 42.7356, lng: -83.4183 };
 
 // Roster. `call` must match the poller output keys (base callsigns).
 const HOSTS = [
-  { call: 'K8JKU', name: 'James', color: '#4a90e2', initials: 'JA',
+  { call: 'K8JKU', name: 'James', color: '#4a90e2', initials: 'JA', shape: 'circle',
     home: { lat: 42.7356, lng: -83.4183 },                          // Clarkston
     poses: { home: 'icons/james-home.png', portable: 'icons/james-portable.png', mobile: 'icons/james-mobile.png' } },
 
-  { call: 'N8JRD', name: 'Jim', color: '#ff7030', initials: 'JI',
+  { call: 'N8JRD', name: 'Jim', color: '#ff7030', initials: 'JI', shape: 'triangle',
     home: { lat: 42.4606, lng: -83.6516 },                          // South Lyon
     poses: { home: 'icons/jim-home.png', portable: 'icons/jim-portable.png', mobile: 'icons/jim-mobile.png' } },
 
-  { call: 'W8KNX', name: 'Rory', color: '#9b59b6', initials: 'RO',
+  { call: 'W8KNX', name: 'Rory', color: '#9b59b6', initials: 'RO', shape: 'square',
     home: { lat: 42.4606, lng: -83.6516 },                          // South Lyon
     poses: { home: 'icons/rory-home.png', portable: 'icons/rory-portable.png', mobile: 'icons/rory-mobile.png' } },
 ];
@@ -510,6 +517,26 @@ const RENDER_FPS   = 30;
 const TRAIL_WIDTH  = 4;        // age-colored core line
 const CASING_WIDTH = 9;        // host-color identity casing under the core
 const CASING_ALPHA = 0.30;
+
+// Trail age is read as opacity. The tail is deliberately dimmer than the head,
+// but it still has to be legible from across the room, so it fades to a floor
+// rather than to nothing. Raise TRAIL_ALPHA_OLD if three days back is still
+// too faint; lower it if the old track competes with today's.
+const TRAIL_ALPHA_FRESH = 0.95;  // opacity at the head (now)
+const TRAIL_ALPHA_OLD   = 0.42;  // opacity at the tail (72h back)
+const TRAIL_FADE_GAMMA  = 1.15;  // >1 holds the bright end longer
+const TRAIL_TAPER_OLD   = 0.72;  // width multiplier at the tail
+
+// Per-host glyph, so overlapping trails stay tellable apart at a glance.
+// Available: circle, triangle, square, diamond, pentagon, hexagon, star,
+// plus, cross, chevron.
+// Circle / triangle / square are the trio that reads fastest at this size;
+// the rest are here for when the roster grows. Hosts without a `shape` fall
+// back to this cycle in roster order.
+const SHAPE_CYCLE = ['circle', 'triangle', 'square', 'diamond', 'hexagon', 'star'];
+const TRAIL_GLYPH_HOURS = 6;   // stamp the glyph along the trail this often, so
+                               // identity survives where routes overlap. 0 = off
+const TRAIL_GLYPH_R     = 5;   // radius of those stamps
 const PULSE_PERIOD_S = 14;     // seconds for the traveling pulse to run a trail
 const MIDNIGHT_TICKS = true;   // small cream dots at each local midnight
 const TRAIL_OFFSET_PX = 7;     // sideways separation between hosts' trails so
@@ -772,7 +799,7 @@ function buildSimulated() {
       track.push(pt);
       prev = pt;
     }
-    return { call: h.call, name: h.name, color: h.color,
+    return { call: h.call, name: h.name, color: h.color, shape: h.shape,
              initials: h.initials, home: h.home, poses: h.poses, track };
   });
   return { generated: now, source: 'Simulated data', hosts: roster };
@@ -816,7 +843,7 @@ async function loadData() {
         .filter(p => p.time >= cutoff)
         .sort((a,b) => a.time - b.time);
       if (track.length) anyPoints = true;
-      return { call: h.call, name: h.name, color: h.color,
+      return { call: h.call, name: h.name, color: h.color, shape: h.shape,
                initials: h.initials, home: h.home, poses: h.poses, track };
     });
     if (!anyPoints && !hosts.length) return applyData(buildSimulated());
@@ -834,7 +861,9 @@ function applyData(data) {
   }).join('|');
 
   hosts = data.hosts.map((h, i) => ({
-    ...h, color: h.color || MODE_PALETTE[i % MODE_PALETTE.length]
+    ...h,
+    color: h.color || MODE_PALETTE[i % MODE_PALETTE.length],
+    shape: h.shape || SHAPE_CYCLE[i % SHAPE_CYCLE.length]
   }));
   dataGeneratedMs = data.generated;
   sourceLabel = data.source || sourceLabel;
@@ -1043,7 +1072,7 @@ function buildCards() {
     c.innerHTML = `
       <div class="avatar"><img class="pose" alt=""><span class="ini">${h.initials || ''}</span></div>
       <div class="who">
-        <div class="call">${h.call}</div>
+        <div class="call">${shapeSvg(h.shape, h.color, 20)}${h.call}</div>
         <div class="name">${h.name}</div>
         <div class="heard" data-heard>--</div>
       </div>
@@ -1146,6 +1175,72 @@ function ageText(min) {
    ============================================================ */
 function ll(p) { return map.latLngToContainerPoint([p.lat, p.lng]); }
 
+/* ---------- host glyphs ----------
+   One source of truth for the marker shapes: the canvas head/pulse markers
+   and the little SVG badges on the cards and callsign tags all come from
+   here, so a host's glyph on the map always matches the one beside their
+   name. Radii are nudged per shape because a triangle inscribed in r looks
+   much smaller than a circle of r. */
+function shapePoints(shape, cx, cy, r) {
+  // A twelve-point cross; `rot` of PI/4 turns a plus into an x.
+  const cross = (rot) => {
+    const w = r * 0.40, e = r * 1.22;
+    return [[-w,-e],[w,-e],[w,-w],[e,-w],[e,w],[w,w],
+            [w,e],[-w,e],[-w,w],[-e,w],[-e,-w],[-w,-w]]
+      .map(pt => [cx + pt[0] * Math.cos(rot) - pt[1] * Math.sin(rot),
+                  cy + pt[0] * Math.sin(rot) + pt[1] * Math.cos(rot)]);
+  };
+  const poly = (n, rot, k) => {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const a = rot + i * 2 * Math.PI / n;
+      out.push([cx + Math.cos(a) * r * k, cy + Math.sin(a) * r * k]);
+    }
+    return out;
+  };
+  switch (shape) {
+    case 'triangle': return poly(3, -Math.PI / 2, 1.22);
+    case 'square':   return poly(4,  Math.PI / 4, 1.06);
+    case 'diamond':  return poly(4, -Math.PI / 2, 1.18);
+    case 'pentagon': return poly(5, -Math.PI / 2, 1.12);
+    case 'hexagon':  return poly(6, -Math.PI / 2, 1.06);
+    case 'star': {
+      const out = [];
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + i * Math.PI / 5;
+        const rr = r * (i % 2 ? 0.52 : 1.32);
+        out.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]);
+      }
+      return out;
+    }
+    case 'plus':  return cross(0);
+    case 'cross': return cross(Math.PI / 4);          // the same arms, rotated
+    case 'chevron':                                    // arrowhead, points up
+      return [[0, -1.30], [1.15, 0.72], [0, 0.16], [-1.15, 0.72]]
+        .map(pt => [cx + pt[0] * r, cy + pt[1] * r]);
+    default: return null;   // circle
+  }
+}
+
+// Traces the glyph on the trail canvas. Caller sets fillStyle and fills.
+function shapePath(shape, x, y, r) {
+  const pts = shapePoints(shape, x, y, r);
+  ctx.beginPath();
+  if (!pts) { ctx.arc(x, y, r, 0, Math.PI * 2); return; }
+  pts.forEach((pt, i) => i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]));
+  ctx.closePath();
+}
+
+// The same glyph as inline SVG, for the roster cards and callsign tags.
+function shapeSvg(shape, color, px) {
+  const pts = shapePoints(shape, 10, 10, 7);
+  const body = pts
+    ? '<polygon points="' + pts.map(pt => pt[0].toFixed(1) + ',' + pt[1].toFixed(1)).join(' ') + '"/>'
+    : '<circle cx="10" cy="10" r="7"/>';
+  return '<svg class="glyph" viewBox="0 0 20 20" width="' + px + '" height="' + px +
+         '" fill="' + color + '" aria-hidden="true">' + body + '</svg>';
+}
+
 // Shift a projected polyline sideways by `off` pixels, using the averaged
 // normals of adjacent segments so corners stay joined (transit-map offset).
 function offsetPolyline(proj, off) {
@@ -1208,22 +1303,52 @@ function drawTrails() {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Host-colored trail; age is expressed as fade + taper.
-    // Fresh segments are bright and full width, 72h-old segments are
-    // thin and nearly transparent. Two passes: soft glow, then core.
+    // Host-colored trail; age is expressed as fade + taper. Fresh segments are
+    // bright and full width; old ones thin and dimmer, but never below
+    // TRAIL_ALPHA_OLD -- fading all the way to zero made the far end of the
+    // window invisible on the board. Two passes: soft glow, then core.
     for (let pass = 0; pass < 2; pass++) {
       for (let i = 1; i < proj.length; i++) {
         const t = Math.min(1, (now - pts[i].time) / windowMs);  // 0 fresh -> 1 old
-        const fade = Math.pow(1 - t, 1.15);
-        const alpha = (pass === 0 ? CASING_ALPHA : 0.95) * fade;
+        const fade = Math.pow(1 - t, TRAIL_FADE_GAMMA);         // 1 fresh -> 0 old
+        const core = TRAIL_ALPHA_OLD + (TRAIL_ALPHA_FRESH - TRAIL_ALPHA_OLD) * fade;
+        const alpha = pass === 0
+          ? CASING_ALPHA * (core / TRAIL_ALPHA_FRESH)
+          : core;
         if (alpha < 0.02) continue;
         ctx.strokeStyle = hexA(host.color, alpha);
         ctx.lineWidth = pass === 0
           ? CASING_WIDTH
-          : (TRAIL_WIDTH * (0.55 + 0.45 * fade));
+          : (TRAIL_WIDTH * (TRAIL_TAPER_OLD + (1 - TRAIL_TAPER_OLD) * fade));
         ctx.beginPath();
         ctx.moveTo(proj[i-1].x, proj[i-1].y);
         ctx.lineTo(proj[i].x, proj[i].y);
+        ctx.stroke();
+      }
+    }
+
+    // Glyph stamps every TRAIL_GLYPH_HOURS. The head marker is usually hidden
+    // behind the host's avatar, so these are what tells two overlapping routes
+    // apart along their length. They carry the segment's own age opacity.
+    if (TRAIL_GLYPH_HOURS > 0) {
+      const stepMs = TRAIL_GLYPH_HOURS * 3600 * 1000;
+      const minGapPx = TRAIL_GLYPH_R * 1.8;   // a host parked overnight would
+                                              // otherwise stamp a clump here
+      let lastBucket = null, lastStamp = null;
+      for (let i = 0; i < proj.length; i++) {
+        const bucket = Math.floor((now - pts[i].time) / stepMs);
+        if (bucket === lastBucket) continue;
+        if (lastStamp && Math.hypot(proj[i].x - lastStamp.x, proj[i].y - lastStamp.y) < minGapPx) continue;
+        lastBucket = bucket;
+        lastStamp = proj[i];
+        const t = Math.min(1, (now - pts[i].time) / windowMs);
+        const fade = Math.pow(1 - t, TRAIL_FADE_GAMMA);
+        const a = TRAIL_ALPHA_OLD + (TRAIL_ALPHA_FRESH - TRAIL_ALPHA_OLD) * fade;
+        shapePath(host.shape, proj[i].x, proj[i].y, TRAIL_GLYPH_R);
+        ctx.fillStyle = hexA(host.color, a);
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(253,248,229,' + (0.55 * a).toFixed(3) + ')';
         ctx.stroke();
       }
     }
@@ -1251,19 +1376,17 @@ function drawTrails() {
     const i1 = Math.min(i0 + 1, proj.length - 1);
     const px = proj[i0].x + (proj[i1].x - proj[i0].x) * f;
     const py = proj[i0].y + (proj[i1].y - proj[i0].y) * f;
-    ctx.beginPath();
     ctx.fillStyle = hexA(host.color, 0.30);
-    ctx.arc(px, py, 8, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath();
+    shapePath(host.shape, px, py, 9); ctx.fill();
     ctx.fillStyle = 'rgba(253,248,229,0.95)';
-    ctx.arc(px, py, 3.2, 0, Math.PI*2); ctx.fill();
+    shapePath(host.shape, px, py, 4); ctx.fill();
 
     // head: soft halo + solid core in host color (plain fills, no shadowBlur)
     const head = proj[proj.length - 1];
-    ctx.beginPath(); ctx.fillStyle = hexA(host.color, 0.25);
-    ctx.arc(head.x, head.y, 10, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.fillStyle = hexA(host.color, 0.95);
-    ctx.arc(head.x, head.y, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = hexA(host.color, 0.25);
+    shapePath(host.shape, head.x, head.y, 11); ctx.fill();
+    ctx.fillStyle = hexA(host.color, 0.95);
+    shapePath(host.shape, head.x, head.y, 6); ctx.fill();
   });
 }
 
@@ -1281,7 +1404,7 @@ function drawAvatars() {
           <div class="host-ring"></div>
           <div class="host-beam"></div>
           <div class="host-body"><div class="host-avatar"><img class="pose" alt=""><span class="ini">${host.initials || ''}</span></div></div>
-          <div class="host-tag">${host.call}</div>
+          <div class="host-tag">${shapeSvg(host.shape, host.color, 13)}${host.call}</div>
         </div>`;
       avatarLayer.appendChild(el);
       markerEls[host.call] = el;
