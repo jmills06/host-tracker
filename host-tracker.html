@@ -235,9 +235,9 @@
     white-space: nowrap;
   }
 
-  /* Glyph badges tie a host's map marker to their name. */
+  /* Glyph badge on the callsign tag, tying a marker to its trail. The roster
+     cards do without one: down there the host colour already says who. */
   .glyph { vertical-align: -1px; margin-right: 6px; }
-  .card .call .glyph { vertical-align: -2px; margin-right: 9px; }
   .host-marker.dim .glyph { opacity: 0.7; }
 
   /* ---------- Map overlays ---------- */
@@ -608,8 +608,8 @@ const BASEMAPS = {
   'versatiles':     { type: 'vector', style: 'https://tiles.versatiles.org/assets/styles/colorful/style.json',
                       attrib: '&copy; VersaTiles &copy; OpenStreetMap contributors' }
 };
-const BASEMAP        = 'ofm-liberty'; // the style the board draws
-const BASEMAP_NO_KEY = 'esri-gray';   // used if BASEMAP needs a key we lack,
+const BASEMAP        = 'esri-street'; // the style the board draws
+const BASEMAP_NO_KEY = 'esri-street'; // used if BASEMAP needs a key we lack,
                                       // or if a vector style cannot load
 
 // Auto-zoom: tightest zoom that fits the chosen content.
@@ -1072,7 +1072,7 @@ function buildCards() {
     c.innerHTML = `
       <div class="avatar"><img class="pose" alt=""><span class="ini">${h.initials || ''}</span></div>
       <div class="who">
-        <div class="call">${shapeSvg(h.shape, h.color, 20)}${h.call}</div>
+        <div class="call">${h.call}</div>
         <div class="name">${h.name}</div>
         <div class="heard" data-heard>--</div>
       </div>
