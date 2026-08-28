@@ -528,7 +528,8 @@ const TRAIL_FADE_GAMMA  = 1.15;  // >1 holds the bright end longer
 const TRAIL_TAPER_OLD   = 0.72;  // width multiplier at the tail
 
 // Per-host glyph, so overlapping trails stay tellable apart at a glance.
-// Available: circle, triangle, square, diamond, pentagon, hexagon, star.
+// Available: circle, triangle, square, diamond, pentagon, hexagon, star,
+// plus, cross, chevron.
 // Circle / triangle / square are the trio that reads fastest at this size;
 // the rest are here for when the roster grows. Hosts without a `shape` fall
 // back to this cycle in roster order.
@@ -1181,6 +1182,14 @@ function ll(p) { return map.latLngToContainerPoint([p.lat, p.lng]); }
    name. Radii are nudged per shape because a triangle inscribed in r looks
    much smaller than a circle of r. */
 function shapePoints(shape, cx, cy, r) {
+  // A twelve-point cross; `rot` of PI/4 turns a plus into an x.
+  const cross = (rot) => {
+    const w = r * 0.40, e = r * 1.22;
+    return [[-w,-e],[w,-e],[w,-w],[e,-w],[e,w],[w,w],
+            [w,e],[-w,e],[-w,w],[-e,w],[-e,-w],[-w,-w]]
+      .map(pt => [cx + pt[0] * Math.cos(rot) - pt[1] * Math.sin(rot),
+                  cy + pt[0] * Math.sin(rot) + pt[1] * Math.cos(rot)]);
+  };
   const poly = (n, rot, k) => {
     const out = [];
     for (let i = 0; i < n; i++) {
@@ -1204,6 +1213,11 @@ function shapePoints(shape, cx, cy, r) {
       }
       return out;
     }
+    case 'plus':  return cross(0);
+    case 'cross': return cross(Math.PI / 4);          // the same arms, rotated
+    case 'chevron':                                    // arrowhead, points up
+      return [[0, -1.30], [1.15, 0.72], [0, 0.16], [-1.15, 0.72]]
+        .map(pt => [cx + pt[0] * r, cy + pt[1] * r]);
     default: return null;   // circle
   }
 }
