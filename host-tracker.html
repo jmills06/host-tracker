@@ -520,35 +520,70 @@ const MODE_PALETTE = ['#ff7030', '#4a90e2', '#9b59b6', '#2ecc71'];
 
 // Basemap.
 // CARTO's raster basemaps are no longer anonymous: unkeyed tiles come back
-// stamped with a diagonal "API KEY REQUIRED" watermark. A key is free (no
-// CARTO account needed, ~5M tiles/month) from https://carto.com/basemaps/apikey/
-// -- request one and paste it below. The key travels in the tile URL, so it is
-// public by nature; there is nothing to protect here.
-// Leave it blank and the board quietly falls back to BASEMAP_NO_KEY, so it
-// never shows the watermark.
-const CARTO_API_KEY = '';
+// stamped with a diagonal "API KEY REQUIRED" watermark, and CARTO is retiring
+// the raster service besides. Pick any entry from BASEMAPS below by id; open
+// basemap-preview.html on the board to compare them side by side first.
+//
+// Keys, when a style needs one, go here. Both are public by nature (they ride
+// in the tile URL), so there is nothing to protect by keeping them out of git.
+//   CARTO  -- free, no account, ~5M tiles/month: https://carto.com/basemaps/apikey/
+//   Stadia -- free for non-commercial use, and usually not needed at all: keyless
+//             on localhost and on domains allowlisted in the Stadia dashboard.
+const CARTO_API_KEY  = '';
+const STADIA_API_KEY = '';
 
+// 'raster' entries are plain tile layers. 'vector' entries need MapLibre, which
+// is fetched on demand only when one is selected -- if the board's browser
+// cannot run it, we drop back to BASEMAP_NO_KEY rather than showing nothing.
 const BASEMAPS = {
-  // Light and readable, same as the POTA boards. Needs the key above.
-  'carto-voyager':  { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                      attrib: '&copy; OpenStreetMap &copy; CARTO',
-                      opts: { subdomains: 'abcd', maxZoom: 20 }, needsKey: true },
-  // Neutral light grey. Needs the key above.
-  'carto-positron': { url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                      attrib: '&copy; OpenStreetMap &copy; CARTO',
-                      opts: { subdomains: 'abcd', maxZoom: 20 }, needsKey: true },
-  // Keyless. Standard OSM carto -- busier than Voyager but always available.
+  // ---- keyless raster ----------------------------------------------------
+  'esri-gray':      { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+                      attrib: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+                      opts: { maxZoom: 16 } },
+  'esri-street':    { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                      attrib: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, USGS',
+                      opts: { maxZoom: 19 } },
+  'esri-topo':      { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+                      attrib: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, USGS',
+                      opts: { maxZoom: 19 } },
   'osm':            { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       attrib: '&copy; OpenStreetMap contributors',
                       opts: { maxZoom: 19 } },
-  // Keyless. Muted grey canvas, closest in feel to Positron; labels thin out
-  // past z16 (Esri stops serving this layer above 16).
-  'esri-gray':      { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-                      attrib: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
-                      opts: { maxZoom: 16 } }
+
+  // ---- raster, key optional (Stadia authorizes by domain) -----------------
+  'stadia-smooth':      { url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png',
+                          attrib: '&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap contributors',
+                          opts: { maxZoom: 20 }, keyParam: 'api_key', keyVar: 'stadia' },
+  'stadia-bright':      { url: 'https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png',
+                          attrib: '&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap contributors',
+                          opts: { maxZoom: 20 }, keyParam: 'api_key', keyVar: 'stadia' },
+  'stadia-toner-lite':  { url: 'https://tiles.stadiamaps.com/tiles/stamen_toner_lite/{z}/{x}/{y}{r}.png',
+                          attrib: '&copy; Stadia Maps &copy; Stamen Design &copy; OpenMapTiles &copy; OpenStreetMap contributors',
+                          opts: { maxZoom: 20 }, keyParam: 'api_key', keyVar: 'stadia' },
+
+  // ---- raster, key required (the old look) --------------------------------
+  'carto-voyager':  { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                      attrib: '&copy; OpenStreetMap &copy; CARTO',
+                      opts: { subdomains: 'abcd', maxZoom: 20 },
+                      keyParam: 'key', keyVar: 'carto', needsKey: true },
+  'carto-positron': { url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                      attrib: '&copy; OpenStreetMap &copy; CARTO',
+                      opts: { subdomains: 'abcd', maxZoom: 20 },
+                      keyParam: 'key', keyVar: 'carto', needsKey: true },
+
+  // ---- keyless vector (MapLibre; no key, no account, no request limits) ----
+  'ofm-liberty':    { type: 'vector', style: 'https://tiles.openfreemap.org/styles/liberty',
+                      attrib: '&copy; OpenFreeMap &copy; OpenMapTiles &copy; OpenStreetMap contributors' },
+  'ofm-positron':   { type: 'vector', style: 'https://tiles.openfreemap.org/styles/positron',
+                      attrib: '&copy; OpenFreeMap &copy; OpenMapTiles &copy; OpenStreetMap contributors' },
+  'ofm-bright':     { type: 'vector', style: 'https://tiles.openfreemap.org/styles/bright',
+                      attrib: '&copy; OpenFreeMap &copy; OpenMapTiles &copy; OpenStreetMap contributors' },
+  'versatiles':     { type: 'vector', style: 'https://tiles.versatiles.org/assets/styles/colorful/style.json',
+                      attrib: '&copy; VersaTiles &copy; OpenStreetMap contributors' }
 };
-const BASEMAP        = 'carto-voyager';  // used once CARTO_API_KEY is filled in
-const BASEMAP_NO_KEY = 'esri-gray';      // used while it is blank
+const BASEMAP        = 'esri-gray';   // the style the board draws
+const BASEMAP_NO_KEY = 'esri-gray';   // used if BASEMAP needs a key we lack,
+                                      // or if a vector style cannot load
 
 // Auto-zoom: tightest zoom that fits the chosen content.
 const FIT_MODE          = 'trails'; // 'trails' = whole 72h paths stay on screen.
@@ -818,19 +853,93 @@ function applyData(data) {
 /* ============================================================
    MAP
    ============================================================ */
-// Builds the tile layer for BASEMAP, falling back to BASEMAP_NO_KEY when the
-// chosen style needs a CARTO key we do not have.
-function baseLayer() {
+// Resolves BASEMAP to a definition we can actually draw, falling back to
+// BASEMAP_NO_KEY when the chosen style needs a key we do not have.
+function pickBasemap() {
   let name = BASEMAPS[BASEMAP] ? BASEMAP : BASEMAP_NO_KEY;
-  if (BASEMAPS[name].needsKey && !CARTO_API_KEY) {
-    console.warn('Basemap "' + name + '" needs a CARTO API key ' +
-                 '(free at https://carto.com/basemaps/apikey/); ' +
-                 'falling back to "' + BASEMAP_NO_KEY + '".');
+  if (BASEMAPS[name].needsKey && !basemapKey(BASEMAPS[name])) {
+    console.warn('Basemap "' + name + '" needs an API key; falling back to "' +
+                 BASEMAP_NO_KEY + '".');
     name = BASEMAP_NO_KEY;
   }
-  const b = BASEMAPS[name];
-  const url = b.needsKey ? b.url + '?key=' + encodeURIComponent(CARTO_API_KEY) : b.url;
-  return L.tileLayer(url, Object.assign({ attribution: b.attrib }, b.opts));
+  return { name: name, def: BASEMAPS[name] };
+}
+
+function basemapKey(def) {
+  if (def.keyVar === 'carto')  return CARTO_API_KEY;
+  if (def.keyVar === 'stadia') return STADIA_API_KEY;
+  return '';
+}
+
+function rasterLayer(def) {
+  const key = basemapKey(def);
+  const url = (def.keyParam && key)
+    ? def.url + '?' + def.keyParam + '=' + encodeURIComponent(key)
+    : def.url;
+  return L.tileLayer(url, Object.assign({ attribution: def.attrib }, def.opts || {}));
+}
+
+// MapLibre, fetched only when a vector style is selected. Each list is tried in
+// order so one CDN or major version being unreachable is not fatal.
+const MAPLIBRE_CSS = [
+  'https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css',
+  'https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.css'
+];
+const MAPLIBRE_JS = [
+  'https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js',
+  'https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.js',
+  'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js'
+];
+const MAPLIBRE_PLUGIN_JS = [
+  'https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js',
+  'https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js'
+];
+
+function loadAsset(url, isCss) {
+  return new Promise((resolve, reject) => {
+    const el = isCss ? document.createElement('link') : document.createElement('script');
+    if (isCss) { el.rel = 'stylesheet'; el.href = url; } else { el.src = url; }
+    el.onload  = () => resolve(url);
+    el.onerror = () => reject(new Error('could not load ' + url));
+    document.head.appendChild(el);
+  });
+}
+
+async function loadFirstAsset(urls, isCss) {
+  let last;
+  for (const url of urls) {
+    try { return await loadAsset(url, isCss); } catch (err) { last = err; }
+  }
+  throw last;
+}
+
+let maplibreReady = null;
+function loadMapLibre() {
+  if (!maplibreReady) {
+    maplibreReady = (async () => {
+      await loadFirstAsset(MAPLIBRE_CSS, true).catch(() => {});
+      await loadFirstAsset(MAPLIBRE_JS);
+      await loadFirstAsset(MAPLIBRE_PLUGIN_JS);
+      if (!L.maplibreGL) throw new Error('maplibre-gl-leaflet did not register');
+    })();
+  }
+  return maplibreReady;
+}
+
+// Adds the basemap under the trails. Vector styles arrive asynchronously; the
+// trail canvas does not depend on them, so a late basemap only means the map
+// paints its background colour for a moment.
+function addBaseLayer(map) {
+  const pick = pickBasemap();
+  if (pick.def.type !== 'vector') { rasterLayer(pick.def).addTo(map); return; }
+
+  loadMapLibre()
+    .then(() => { L.maplibreGL({ style: pick.def.style, attribution: pick.def.attrib }).addTo(map); })
+    .catch(err => {
+      console.warn('Vector basemap "' + pick.name + '" unavailable (' + err.message +
+                   '); falling back to "' + BASEMAP_NO_KEY + '".');
+      rasterLayer(BASEMAPS[BASEMAP_NO_KEY]).addTo(map);
+    });
 }
 
 function initMap() {
@@ -840,7 +949,7 @@ function initMap() {
     boxZoom: false, keyboard: false, touchZoom: false, tap: false,
     inertia: false, zoomSnap: 0.1
   });
-  baseLayer().addTo(map);
+  addBaseLayer(map);
 
   trailCanvas = document.getElementById('trails');
   ctx = trailCanvas.getContext('2d');

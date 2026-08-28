@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Host Tracker - Basemap Preview</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@300;400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<style>
+  /* ============================================================
+     BASEMAP PREVIEW  --  side-by-side look test for host-tracker
+     Open this on the board (or any browser) to see how each
+     candidate basemap renders at the zooms the board actually uses,
+     then copy the id of the one you like into BASEMAP in
+     host-tracker.html.
+     ============================================================ */
+  :root {
+    --navy:      #152333;
+    --navy-dark: #0d1620;
+    --orange:    #ff7030;
+    --cream:     #fdf8e5;
+    --cream-80:  rgba(253, 248, 229, 0.80);
+    --cream-50:  rgba(253, 248, 229, 0.50);
+    --good:      #2ecc71;
+    --warn:      #f39c12;
+    --bad:       #e74c3c;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--navy-dark);
+    color: var(--cream);
+    font-family: 'Source Sans Pro', system-ui, sans-serif;
+    padding: 24px;
+  }
+  h1 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600; font-size: 30px; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--orange);
+  }
+  .sub { color: var(--cream-50); font-size: 14px; margin: 4px 0 18px; max-width: 78ch; }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-end;
+    background: var(--navy); border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 12px; padding: 14px 18px; margin-bottom: 22px;
+  }
+  .ctl { display: flex; flex-direction: column; gap: 5px; }
+  .ctl label { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--cream-50); }
+  .ctl input {
+    background: var(--navy-dark); color: var(--cream);
+    border: 1px solid rgba(255,255,255,0.18); border-radius: 6px;
+    padding: 7px 10px; font: inherit; font-size: 13px; min-width: 240px;
+  }
+  .zooms { display: flex; gap: 8px; }
+  .zooms button, .apply {
+    background: var(--navy-dark); color: var(--cream-80);
+    border: 1px solid rgba(255,255,255,0.18); border-radius: 6px;
+    padding: 7px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .zooms button.on { background: var(--orange); border-color: var(--orange); color: #1a1005; font-weight: 600; }
+  .apply:hover, .zooms button:hover { border-color: var(--orange); }
+
+  .grid {
+    display: grid; gap: 18px;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  }
+  .card {
+    background: var(--navy); border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 12px; overflow: hidden; display: flex; flex-direction: column;
+  }
+  .card h2 {
+    font-family: 'Oswald', sans-serif; font-weight: 500; font-size: 17px;
+    padding: 11px 14px 0; letter-spacing: 0.5px;
+  }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px 0; }
+  .badge {
+    font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase;
+    border-radius: 5px; padding: 2px 7px; border: 1px solid currentColor;
+  }
+  .badge.raster { color: #8fd3ff; }
+  .badge.vector { color: #c9a2ff; }
+  .badge.nokey  { color: var(--good); }
+  .badge.key    { color: var(--warn); }
+  .note { font-size: 12px; color: var(--cream-50); padding: 9px 14px 11px; min-height: 52px; }
+  .map { height: 300px; background: #e9eef2; position: relative; }
+  .map .leaflet-control-attribution { font-size: 9px !important; }
+  .loadbtn {
+    position: absolute; inset: 0; z-index: 500;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(13,22,32,0.88); color: var(--cream-80);
+    border: 0; font: inherit; font-size: 14px; cursor: pointer; width: 100%;
+  }
+  .loadbtn:hover { color: var(--orange); }
+  .foot {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 9px 14px 12px; border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  code {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+    color: var(--orange); background: rgba(255,112,48,0.10);
+    border-radius: 4px; padding: 2px 6px;
+  }
+  .status { font-size: 11px; color: var(--cream-50); text-align: right; }
+  .status.ok   { color: var(--good); }
+  .status.err  { color: var(--bad); }
+  .status.warn { color: var(--warn); }
+</style>
+</head>
+<body>
+
+<h1>Basemap preview</h1>
+<p class="sub">
+  Every candidate below is drawn over the same view as the live board. Zoom 14 is
+  what the tracker actually caps at (<code>FIT_MAX_ZOOM</code>), so judge label
+  density there. When you pick one, copy its id into <code>BASEMAP</code> in
+  <code>host-tracker.html</code>. Vector panes load MapLibre on demand -- if they
+  stutter or fail here, they will do the same on the board, so stick to a raster
+  option.
+</p>
+
+<div class="controls">
+  <div class="ctl">
+    <label for="cartokey">CARTO api key (optional)</label>
+    <input id="cartokey" type="text" placeholder="paste to preview CARTO styles" autocomplete="off">
+  </div>
+  <div class="ctl">
+    <label for="stadiakey">Stadia api key (optional)</label>
+    <input id="stadiakey" type="text" placeholder="usually not needed on a real domain" autocomplete="off">
+  </div>
+  <button class="apply" id="apply">Apply keys</button>
+  <div class="ctl">
+    <label>Zoom</label>
+    <div class="zooms" id="zooms"></div>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+/* ============================================================
+   CANDIDATES
+   Keep the ids here in sync with BASEMAPS in host-tracker.html.
+   ============================================================ */
+const CANDIDATES = [
+  { id: 'esri-gray', name: 'Esri Light Gray Canvas', kind: 'raster', key: false,
+    note: 'Muted grey canvas, closest keyless match to CARTO Positron. Esri stops serving this layer above zoom 16.',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    attrib: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ', opts: { maxZoom: 16 } },
+
+  { id: 'esri-street', name: 'Esri World Street Map', kind: 'raster', key: false,
+    note: 'Colored roads and landuse, the closest keyless raster to Voyager. Good road hierarchy at z12-15.',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attrib: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, USGS', opts: { maxZoom: 19 } },
+
+  { id: 'esri-topo', name: 'Esri World Topo', kind: 'raster', key: false,
+    note: 'Street map plus shaded relief and public land tints. Busier, but the state forest and park boundaries show.',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attrib: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, USGS', opts: { maxZoom: 19 } },
+
+  { id: 'osm', name: 'OpenStreetMap standard', kind: 'raster', key: false,
+    note: 'The reference OSM render. Always available, but heavier and higher contrast than Voyager; OSMF asks that heavy or commercial use move elsewhere.',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attrib: '&copy; OpenStreetMap contributors', opts: { maxZoom: 19 } },
+
+  { id: 'stadia-smooth', name: 'Stadia Alidade Smooth', kind: 'raster', key: 'stadia',
+    note: 'A very close Positron relative. Free for non-commercial use; keyless on localhost and on domains you allowlist in the Stadia dashboard.',
+    url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png',
+    attrib: '&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap contributors', opts: { maxZoom: 20 } },
+
+  { id: 'stadia-bright', name: 'Stadia OSM Bright', kind: 'raster', key: 'stadia',
+    note: 'Stadia’s take on OSM Bright: colored, Voyager-like weight. Same free non-commercial terms as above.',
+    url: 'https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png',
+    attrib: '&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap contributors', opts: { maxZoom: 20 } },
+
+  { id: 'stadia-toner-lite', name: 'Stadia Stamen Toner Lite', kind: 'raster', key: 'stadia',
+    note: 'Near-monochrome. The orange trails pop hardest over this, but there is no landuse color at all.',
+    url: 'https://tiles.stadiamaps.com/tiles/stamen_toner_lite/{z}/{x}/{y}{r}.png',
+    attrib: '&copy; Stadia Maps &copy; Stamen Design &copy; OpenMapTiles &copy; OpenStreetMap contributors', opts: { maxZoom: 20 } },
+
+  { id: 'carto-voyager', name: 'CARTO Voyager (current look)', kind: 'raster', key: 'carto',
+    note: 'What the board used before the watermark. Needs a free key from carto.com/basemaps/apikey, and CARTO is retiring raster.',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attrib: '&copy; OpenStreetMap &copy; CARTO', opts: { subdomains: 'abcd', maxZoom: 20 } },
+
+  { id: 'carto-positron', name: 'CARTO Positron', kind: 'raster', key: 'carto',
+    note: 'The grey CARTO style. Same key and same raster retirement caveat.',
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attrib: '&copy; OpenStreetMap &copy; CARTO', opts: { subdomains: 'abcd', maxZoom: 20 } },
+
+  { id: 'ofm-liberty', name: 'OpenFreeMap Liberty', kind: 'vector', key: false,
+    note: 'No key, no account, no request limits, donation funded. Liberty is the full-detail style and the nearest thing to Voyager on this list.',
+    style: 'https://tiles.openfreemap.org/styles/liberty',
+    attrib: '&copy; OpenFreeMap &copy; OpenMapTiles &copy; OpenStreetMap contributors' },
+
+  { id: 'ofm-positron', name: 'OpenFreeMap Positron', kind: 'vector', key: false,
+    note: 'The Positron look, keyless. Same service and terms as Liberty.',
+    style: 'https://tiles.openfreemap.org/styles/positron',
+    attrib: '&copy; OpenFreeMap &copy; OpenMapTiles &copy; OpenStreetMap contributors' },
+
+  { id: 'ofm-bright', name: 'OpenFreeMap Bright', kind: 'vector', key: false,
+    note: 'Higher contrast OSM Bright derivative, keyless.',
+    style: 'https://tiles.openfreemap.org/styles/bright',
+    attrib: '&copy; OpenFreeMap &copy; OpenMapTiles &copy; OpenStreetMap contributors' },
+
+  { id: 'versatiles', name: 'VersaTiles Colorful', kind: 'vector', key: false,
+    note: 'Second keyless vector service, useful as a backup if OpenFreeMap is ever down.',
+    style: ['https://tiles.versatiles.org/assets/styles/colorful/style.json',
+            'https://tiles.versatiles.org/assets/styles/colorful.json'],
+    attrib: '&copy; VersaTiles &copy; OpenStreetMap contributors' }
+];
+
+// Zoom presets. 14 is the board's FIT_MAX_ZOOM, 11 is a typical fitted rove.
+const ZOOMS = [8, 11, 14, 16];
+let view = { center: [42.73, -84.55], zoom: 11 };   // mid-Michigan until data loads
+
+/* ---------- MapLibre loader (vector styles only) ---------- */
+// Tried in order; the first combination that defines L.maplibreGL wins. The
+// per-card status line reports which one worked, so the board tells us what it
+// can actually run.
+const MAPLIBRE_JS = [
+  'https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js',
+  'https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.js',
+  'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js'
+];
+const MAPLIBRE_CSS = [
+  'https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css',
+  'https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.css'
+];
+const PLUGIN_JS = [
+  'https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js',
+  'https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js'
+];
+
+function loadOne(url, css) {
+  return new Promise((res, rej) => {
+    const el = css ? document.createElement('link') : document.createElement('script');
+    if (css) { el.rel = 'stylesheet'; el.href = url; } else { el.src = url; }
+    el.onload = () => res(url);
+    el.onerror = () => rej(new Error('failed: ' + url));
+    document.head.appendChild(el);
+  });
+}
+async function loadFirst(urls, css) {
+  let last;
+  for (const u of urls) { try { return await loadOne(u, css); } catch (e) { last = e; } }
+  throw last;
+}
+let maplibrePromise = null;
+function loadMapLibre() {
+  if (!maplibrePromise) {
+    maplibrePromise = (async () => {
+      await loadFirst(MAPLIBRE_CSS, true).catch(() => {});
+      const gl = await loadFirst(MAPLIBRE_JS);
+      const pl = await loadFirst(PLUGIN_JS);
+      if (!window.L || !L.maplibreGL) throw new Error('L.maplibreGL missing after load');
+      return gl.split('/npm/')[1] || gl;
+    })();
+  }
+  return maplibrePromise;
+}
+
+/* ---------- Cards ---------- */
+const maps = [];   // { cand, map, setStatus }
+
+function keyFor(cand) {
+  if (cand.key === 'carto')  return document.getElementById('cartokey').value.trim();
+  if (cand.key === 'stadia') return document.getElementById('stadiakey').value.trim();
+  return '';
+}
+
+function tileUrl(cand) {
+  const k = keyFor(cand);
+  if (cand.key === 'carto')  return k ? cand.url + '?key=' + encodeURIComponent(k) : cand.url;
+  if (cand.key === 'stadia') return k ? cand.url + '?api_key=' + encodeURIComponent(k) : cand.url;
+  return cand.url;
+}
+
+function buildCard(cand) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML =
+    '<h2></h2>' +
+    '<div class="badges">' +
+      '<span class="badge ' + cand.kind + '">' + cand.kind + '</span>' +
+      '<span class="badge ' + (cand.key ? 'key' : 'nokey') + '">' +
+        (cand.key ? cand.key + ' key' : 'no key') + '</span>' +
+    '</div>' +
+    '<div class="note"></div>' +
+    '<div class="map"></div>' +
+    '<div class="foot"><code></code><span class="status">idle</span></div>';
+  card.querySelector('h2').textContent = cand.name;
+  card.querySelector('.note').textContent = cand.note;
+  card.querySelector('code').textContent = cand.id;
+  document.getElementById('grid').appendChild(card);
+
+  const holder = card.querySelector('.map');
+  const statusEl = card.querySelector('.status');
+  const setStatus = (text, cls) => { statusEl.textContent = text; statusEl.className = 'status ' + (cls || ''); };
+
+  if (cand.kind === 'vector') {
+    const btn = document.createElement('button');
+    btn.className = 'loadbtn';
+    btn.textContent = 'Load vector preview (WebGL)';
+    btn.onclick = () => { btn.remove(); initMapFor(cand, holder, setStatus); };
+    holder.appendChild(btn);
+    setStatus('not loaded');
+  } else {
+    initMapFor(cand, holder, setStatus);
+  }
+}
+
+function initMapFor(cand, holder, setStatus) {
+  const map = L.map(holder, {
+    zoomControl: false, attributionControl: true,
+    dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+    boxZoom: false, keyboard: false, touchZoom: false, tap: false,
+    inertia: false, zoomSnap: 0.1
+  }).setView(view.center, view.zoom);
+
+  const entry = { cand: cand, map: map, setStatus: setStatus, layer: null };
+  maps.push(entry);
+
+  if (cand.kind === 'vector') {
+    setStatus('loading maplibre...');
+    loadMapLibre().then(ver => {
+      const styles = Array.isArray(cand.style) ? cand.style : [cand.style];
+      entry.layer = L.maplibreGL({ style: styles[0], attribution: cand.attrib }).addTo(map);
+      setStatus('loaded (' + ver + ')', 'ok');
+      // A bad style URL fails inside MapLibre, so surface its errors too.
+      const gl = entry.layer.getMaplibreMap && entry.layer.getMaplibreMap();
+      if (gl && gl.on) {
+        gl.on('error', e => setStatus('style error: ' + ((e && e.error && e.error.message) || 'unknown'), 'err'));
+        gl.on('load', () => setStatus('rendered', 'ok'));
+      }
+    }).catch(err => setStatus(String(err.message || err), 'err'));
+    return;
+  }
+
+  let ok = 0, bad = 0;
+  entry.layer = L.tileLayer(tileUrl(cand), Object.assign({ attribution: cand.attrib }, cand.opts || {}))
+    .on('tileload',  () => { ok++;  if (!bad) setStatus(ok + ' tiles ok', 'ok'); })
+    .on('tileerror', () => { bad++; setStatus(bad + ' tile errors (key or zoom?)', 'err'); })
+    .addTo(map);
+  setStatus('loading...');
+  if (cand.key && !keyFor(cand)) {
+    setStatus(cand.key === 'carto' ? 'no key: expect watermark' : 'no key: may work by domain', 'warn');
+  }
+}
+
+function reloadKeyed() {
+  maps.forEach(e => {
+    if (e.cand.kind === 'vector' || !e.cand.key) return;
+    if (e.layer) e.map.removeLayer(e.layer);
+    let ok = 0, bad = 0;
+    e.layer = L.tileLayer(tileUrl(e.cand), Object.assign({ attribution: e.cand.attrib }, e.cand.opts || {}))
+      .on('tileload',  () => { ok++;  if (!bad) e.setStatus(ok + ' tiles ok', 'ok'); })
+      .on('tileerror', () => { bad++; e.setStatus(bad + ' tile errors (key or zoom?)', 'err'); })
+      .addTo(e.map);
+    e.setStatus('reloading...');
+  });
+}
+
+function setZoom(z) {
+  view.zoom = z;
+  document.querySelectorAll('#zooms button').forEach(b => b.classList.toggle('on', +b.dataset.z === z));
+  maps.forEach(e => e.map.setView(view.center, z));
+}
+
+/* ---------- Boot ---------- */
+ZOOMS.forEach(z => {
+  const b = document.createElement('button');
+  b.textContent = 'z' + z; b.dataset.z = z;
+  b.onclick = () => setZoom(z);
+  document.getElementById('zooms').appendChild(b);
+});
+document.getElementById('apply').onclick = reloadKeyed;
+
+// Center on the newest host fix so the preview shows the ground the board shows.
+fetch('host-tracker.json', { cache: 'no-store' })
+  .then(r => r.ok ? r.json() : Promise.reject(new Error('no data file')))
+  .then(d => {
+    let newest = null;
+    (d.hosts || []).forEach(h => (h.track || []).forEach(p => {
+      if (!newest || p.time > newest.time) newest = p;
+    }));
+    if (newest) view.center = [newest.lat, newest.lng];
+  })
+  .catch(() => {})
+  .finally(() => {
+    CANDIDATES.forEach(buildCard);
+    setZoom(view.zoom);
+  });
+</script>
+</body>
+</html>
