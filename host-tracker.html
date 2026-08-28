@@ -556,6 +556,9 @@ const MODE_PALETTE = ['#ff7030', '#4a90e2', '#9b59b6', '#2ecc71'];
 //   CARTO  -- free, no account, ~5M tiles/month: https://carto.com/basemaps/apikey/
 //   Stadia -- free for non-commercial use, and usually not needed at all: keyless
 //             on localhost and on domains allowlisted in the Stadia dashboard.
+// Left blank on purpose: .github/workflows/pages.yml substitutes the repo
+// secret of the same name into this line when the board is published, so the
+// key stays out of git history. Paste one here for a local test if you like.
 const CARTO_API_KEY  = '';
 const STADIA_API_KEY = '';
 

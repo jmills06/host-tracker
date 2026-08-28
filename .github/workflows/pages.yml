@@ -1,0 +1,75 @@
+# Publishes the board to GitHub Pages, substituting the CARTO basemap key from
+# repository secrets into host-tracker.html on the way out.
+#
+# This exists so the key stays out of git history. It does NOT make the key
+# private: it ships inside the published page, where any visitor can read it
+# off a tile request. What actually protects it is the domain restriction set
+# on the key at carto.com.
+#
+# REQUIRES: Settings -> Pages -> Build and deployment -> Source = "GitHub Actions".
+# While the source is still "Deploy from a branch", this workflow runs but the
+# live site keeps coming from the branch, so the key never lands.
+name: Deploy board to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race. The aprs poller commits every 10 minutes, so
+# these queue up; the newest wins and the older one is dropped.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Inject the CARTO basemap key
+        env:
+          CARTO_API_KEY: ${{ secrets.CARTO_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys, pathlib
+
+          key = os.environ.get('CARTO_API_KEY', '').strip()
+          page = pathlib.Path('host-tracker.html')
+          text = page.read_text(encoding='utf-8')
+
+          # Fail loudly rather than silently publishing a keyless board: if this
+          # constant is ever renamed, the substitution must break the build, not
+          # quietly leave the map on its fallback.
+          pattern = re.compile(r"const CARTO_API_KEY(\s*)=\s*'[^']*';")
+          if not pattern.search(text):
+              sys.exit('CARTO_API_KEY constant not found in host-tracker.html')
+
+          if not key:
+              print('::warning::CARTO_API_KEY secret is empty; '
+                    'the board will use its keyless fallback basemap')
+              raise SystemExit(0)
+
+          # The key is read from the environment and never interpolated into a
+          # shell command, so it cannot leak through the log or break on quoting.
+          text = pattern.sub(lambda m: "const CARTO_API_KEY%s= '%s';" % (m.group(1), key),
+                             text, count=1)
+          page.write_text(text, encoding='utf-8')
+          print('CARTO key injected (%d chars)' % len(key))
+          PY
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - id: deploy
+        uses: actions/deploy-pages@v4
