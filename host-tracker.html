@@ -235,9 +235,9 @@
     white-space: nowrap;
   }
 
-  /* Glyph badges tie a host's map marker to their name. */
+  /* Glyph badge on the callsign tag, tying a marker to its trail. The roster
+     cards do without one: down there the host colour already says who. */
   .glyph { vertical-align: -1px; margin-right: 6px; }
-  .card .call .glyph { vertical-align: -2px; margin-right: 9px; }
   .host-marker.dim .glyph { opacity: 0.7; }
 
   /* ---------- Map overlays ---------- */
@@ -556,6 +556,9 @@ const MODE_PALETTE = ['#ff7030', '#4a90e2', '#9b59b6', '#2ecc71'];
 //   CARTO  -- free, no account, ~5M tiles/month: https://carto.com/basemaps/apikey/
 //   Stadia -- free for non-commercial use, and usually not needed at all: keyless
 //             on localhost and on domains allowlisted in the Stadia dashboard.
+// Left blank on purpose: .github/workflows/pages.yml substitutes the repo
+// secret of the same name into this line when the board is published, so the
+// key stays out of git history. Paste one here for a local test if you like.
 const CARTO_API_KEY  = '';
 const STADIA_API_KEY = '';
 
@@ -608,8 +611,8 @@ const BASEMAPS = {
   'versatiles':     { type: 'vector', style: 'https://tiles.versatiles.org/assets/styles/colorful/style.json',
                       attrib: '&copy; VersaTiles &copy; OpenStreetMap contributors' }
 };
-const BASEMAP        = 'ofm-liberty'; // the style the board draws
-const BASEMAP_NO_KEY = 'esri-gray';   // used if BASEMAP needs a key we lack,
+const BASEMAP        = 'carto-voyager'; // the style the board draws
+const BASEMAP_NO_KEY = 'esri-street'; // used if BASEMAP needs a key we lack,
                                       // or if a vector style cannot load
 
 // Auto-zoom: tightest zoom that fits the chosen content.
@@ -960,12 +963,36 @@ function loadMapLibre() {
 // renders has to degrade to raster on its own.
 const VECTOR_TIMEOUT_MS = 12000;
 
+// Same idea for raster: this many failed tiles and we swap to the keyless
+// fallback. It catches a tile service going away -- CARTO retiring raster, a
+// key expiring into 403s. It does NOT catch a watermark or a "401" image:
+// those arrive as perfectly good tiles, so only your eyes will spot them.
+const RASTER_ERROR_LIMIT = 8;
+
+// Adds a raster basemap and watches it. If its tiles start failing outright we
+// swap to the keyless fallback once, rather than leaving the board bare.
+function addGuardedRaster(map, name, def) {
+  const layer = rasterLayer(def);
+  if (name !== BASEMAP_NO_KEY) {
+    let errors = 0, swapped = false;
+    layer.on('tileerror', () => {
+      if (swapped || ++errors < RASTER_ERROR_LIMIT) return;
+      swapped = true;
+      console.warn('Basemap "' + name + '" is failing (' + errors +
+                   ' tile errors); falling back to "' + BASEMAP_NO_KEY + '".');
+      map.removeLayer(layer);
+      rasterLayer(BASEMAPS[BASEMAP_NO_KEY]).addTo(map);
+    });
+  }
+  layer.addTo(map);
+}
+
 // Adds the basemap under the trails. Vector styles arrive asynchronously; the
 // trail canvas does not depend on them, so a late basemap only means the map
 // paints its background colour for a moment.
 function addBaseLayer(map) {
   const pick = pickBasemap();
-  if (pick.def.type !== 'vector') { rasterLayer(pick.def).addTo(map); return; }
+  if (pick.def.type !== 'vector') { addGuardedRaster(map, pick.name, pick.def); return; }
 
   let settled = false;
   const fallback = (why) => {
@@ -978,6 +1005,7 @@ function addBaseLayer(map) {
   };
 
   let glLayer = null;
+  // The fallback itself is added unguarded: there is nowhere further to fall.
   loadMapLibre().then(() => {
     glLayer = L.maplibreGL({ style: pick.def.style, attribution: pick.def.attrib }).addTo(map);
 
@@ -1072,7 +1100,7 @@ function buildCards() {
     c.innerHTML = `
       <div class="avatar"><img class="pose" alt=""><span class="ini">${h.initials || ''}</span></div>
       <div class="who">
-        <div class="call">${shapeSvg(h.shape, h.color, 20)}${h.call}</div>
+        <div class="call">${h.call}</div>
         <div class="name">${h.name}</div>
         <div class="heard" data-heard>--</div>
       </div>
