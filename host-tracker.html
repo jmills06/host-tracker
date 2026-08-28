@@ -608,7 +608,7 @@ const BASEMAPS = {
   'versatiles':     { type: 'vector', style: 'https://tiles.versatiles.org/assets/styles/colorful/style.json',
                       attrib: '&copy; VersaTiles &copy; OpenStreetMap contributors' }
 };
-const BASEMAP        = 'esri-street'; // the style the board draws
+const BASEMAP        = 'carto-voyager'; // the style the board draws
 const BASEMAP_NO_KEY = 'esri-street'; // used if BASEMAP needs a key we lack,
                                       // or if a vector style cannot load
 
@@ -960,12 +960,36 @@ function loadMapLibre() {
 // renders has to degrade to raster on its own.
 const VECTOR_TIMEOUT_MS = 12000;
 
+// Same idea for raster: this many failed tiles and we swap to the keyless
+// fallback. It catches a tile service going away -- CARTO retiring raster, a
+// key expiring into 403s. It does NOT catch a watermark or a "401" image:
+// those arrive as perfectly good tiles, so only your eyes will spot them.
+const RASTER_ERROR_LIMIT = 8;
+
+// Adds a raster basemap and watches it. If its tiles start failing outright we
+// swap to the keyless fallback once, rather than leaving the board bare.
+function addGuardedRaster(map, name, def) {
+  const layer = rasterLayer(def);
+  if (name !== BASEMAP_NO_KEY) {
+    let errors = 0, swapped = false;
+    layer.on('tileerror', () => {
+      if (swapped || ++errors < RASTER_ERROR_LIMIT) return;
+      swapped = true;
+      console.warn('Basemap "' + name + '" is failing (' + errors +
+                   ' tile errors); falling back to "' + BASEMAP_NO_KEY + '".');
+      map.removeLayer(layer);
+      rasterLayer(BASEMAPS[BASEMAP_NO_KEY]).addTo(map);
+    });
+  }
+  layer.addTo(map);
+}
+
 // Adds the basemap under the trails. Vector styles arrive asynchronously; the
 // trail canvas does not depend on them, so a late basemap only means the map
 // paints its background colour for a moment.
 function addBaseLayer(map) {
   const pick = pickBasemap();
-  if (pick.def.type !== 'vector') { rasterLayer(pick.def).addTo(map); return; }
+  if (pick.def.type !== 'vector') { addGuardedRaster(map, pick.name, pick.def); return; }
 
   let settled = false;
   const fallback = (why) => {
@@ -978,6 +1002,7 @@ function addBaseLayer(map) {
   };
 
   let glLayer = null;
+  // The fallback itself is added unguarded: there is nowhere further to fall.
   loadMapLibre().then(() => {
     glLayer = L.maplibreGL({ style: pick.def.style, attribution: pick.def.attrib }).addTo(map);
 

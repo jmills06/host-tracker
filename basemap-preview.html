@@ -339,27 +339,40 @@ function initMapFor(cand, holder, setStatus) {
     return;
   }
 
+  attachTiles(entry, map, setStatus);
+}
+
+// A tile arriving is NOT the same as a tile being usable. CARTO answers an
+// unkeyed request with a watermarked image and Stadia with a "401 Invalid
+// Authentication" image -- both HTTP 200, both firing Leaflet's tileload. So a
+// style that wants a key it does not have keeps a warning, however many tiles
+// come back; only the keyless styles get to report a clean pass.
+function attachTiles(entry, map, setStatus) {
+  const cand = entry.cand;
+  const missingKey = cand.key && !keyFor(cand);
   let ok = 0, bad = 0;
   entry.layer = L.tileLayer(tileUrl(cand), Object.assign({ attribution: cand.attrib }, cand.opts || {}))
-    .on('tileload',  () => { ok++;  if (!bad) setStatus(ok + ' tiles ok', 'ok'); })
+    .on('tileload', () => {
+      ok++;
+      if (bad) return;
+      if (missingKey) {
+        setStatus(cand.key === 'carto'
+          ? 'tiles load, but watermarked - paste a key'
+          : 'tiles load - check the pane for a 401 image', 'warn');
+      } else {
+        setStatus(ok + ' tiles ok', 'ok');
+      }
+    })
     .on('tileerror', () => { bad++; setStatus(bad + ' tile errors (key or zoom?)', 'err'); })
     .addTo(map);
-  setStatus('loading...');
-  if (cand.key && !keyFor(cand)) {
-    setStatus(cand.key === 'carto' ? 'no key: expect watermark' : 'no key: may work by domain', 'warn');
-  }
+  setStatus(missingKey ? 'no key: loading anyway...' : 'loading...');
 }
 
 function reloadKeyed() {
   maps.forEach(e => {
     if (e.cand.kind === 'vector' || !e.cand.key) return;
     if (e.layer) e.map.removeLayer(e.layer);
-    let ok = 0, bad = 0;
-    e.layer = L.tileLayer(tileUrl(e.cand), Object.assign({ attribution: e.cand.attrib }, e.cand.opts || {}))
-      .on('tileload',  () => { ok++;  if (!bad) e.setStatus(ok + ' tiles ok', 'ok'); })
-      .on('tileerror', () => { bad++; e.setStatus(bad + ' tile errors (key or zoom?)', 'err'); })
-      .addTo(e.map);
-    e.setStatus('reloading...');
+    attachTiles(e, e.map, e.setStatus);
   });
 }
 
