@@ -581,7 +581,7 @@ const BASEMAPS = {
   'versatiles':     { type: 'vector', style: 'https://tiles.versatiles.org/assets/styles/colorful/style.json',
                       attrib: '&copy; VersaTiles &copy; OpenStreetMap contributors' }
 };
-const BASEMAP        = 'esri-gray';   // the style the board draws
+const BASEMAP        = 'ofm-liberty'; // the style the board draws
 const BASEMAP_NO_KEY = 'esri-gray';   // used if BASEMAP needs a key we lack,
                                       // or if a vector style cannot load
 
@@ -926,6 +926,11 @@ function loadMapLibre() {
   return maplibreReady;
 }
 
+// How long a vector basemap gets to paint its first frame before we give up on
+// it. The board runs unattended, so a WebGL context that loads but never
+// renders has to degrade to raster on its own.
+const VECTOR_TIMEOUT_MS = 12000;
+
 // Adds the basemap under the trails. Vector styles arrive asynchronously; the
 // trail canvas does not depend on them, so a late basemap only means the map
 // paints its background colour for a moment.
@@ -933,13 +938,29 @@ function addBaseLayer(map) {
   const pick = pickBasemap();
   if (pick.def.type !== 'vector') { rasterLayer(pick.def).addTo(map); return; }
 
-  loadMapLibre()
-    .then(() => { L.maplibreGL({ style: pick.def.style, attribution: pick.def.attrib }).addTo(map); })
-    .catch(err => {
-      console.warn('Vector basemap "' + pick.name + '" unavailable (' + err.message +
-                   '); falling back to "' + BASEMAP_NO_KEY + '".');
-      rasterLayer(BASEMAPS[BASEMAP_NO_KEY]).addTo(map);
-    });
+  let settled = false;
+  const fallback = (why) => {
+    if (settled) return;
+    settled = true;
+    console.warn('Vector basemap "' + pick.name + '" unavailable (' + why +
+                 '); falling back to "' + BASEMAP_NO_KEY + '".');
+    if (glLayer && map.hasLayer(glLayer)) { try { map.removeLayer(glLayer); } catch (e) {} }
+    rasterLayer(BASEMAPS[BASEMAP_NO_KEY]).addTo(map);
+  };
+
+  let glLayer = null;
+  loadMapLibre().then(() => {
+    glLayer = L.maplibreGL({ style: pick.def.style, attribution: pick.def.attrib }).addTo(map);
+
+    // Loading the plugin is not proof it works: a MapLibre version mismatch or a
+    // board with no usable WebGL fails here, after the scripts are in.
+    const gl = glLayer.getMaplibreMap && glLayer.getMaplibreMap();
+    if (!gl) { fallback('no maplibre map instance'); return; }
+    gl.on('load',  () => { settled = true; });
+    gl.on('error', e => fallback((e && e.error && e.error.message) || 'style error'));
+    setTimeout(() => fallback('no first frame in ' + (VECTOR_TIMEOUT_MS / 1000) + 's'),
+               VECTOR_TIMEOUT_MS);
+  }).catch(err => fallback(err.message));
 }
 
 function initMap() {
