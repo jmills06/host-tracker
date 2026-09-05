@@ -86,6 +86,27 @@
   .badge.key    { color: var(--warn); }
   .note { font-size: 12px; color: var(--cream-50); padding: 9px 14px 11px; min-height: 52px; }
   .map { height: 300px; background: #e9eef2; position: relative; }
+  /* Sample trails painted over each candidate, with the board's own casing,
+     widths and age fade. Picking a basemap without them only answers half the
+     question -- the half that matters is whether a trail survives on top. */
+  .map canvas.trails {
+    position: absolute; inset: 0;
+    z-index: 500; pointer-events: none;
+  }
+  .swatches { display: flex; gap: 7px; padding: 0 14px 11px; flex-wrap: wrap; }
+  .swatch {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; letter-spacing: 0.6px; color: var(--cream-50);
+  }
+  .swatch i {
+    width: 22px; height: 7px; border-radius: 4px;
+    box-shadow: 0 0 0 2px rgba(13,22,32,0.55);
+  }
+  .toggle {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--cream-80);
+  }
+  .toggle input { width: 17px; height: 17px; accent-color: var(--orange); }
   .map .leaflet-control-attribution { font-size: 9px !important; }
   .loadbtn {
     position: absolute; inset: 0; z-index: 500;
@@ -120,6 +141,14 @@
   stutter or fail here, they will do the same on the board, so stick to a raster
   option.
 </p>
+<p class="sub">
+  The sample trails use the board's real palette, casing and age fade, so what
+  you are judging is the pair: a basemap is only good here if all three trails
+  stay readable over its roads, water and parks at every zoom. Jim's line used
+  to be the show's orange, which is very nearly the same colour Esri paints
+  motorways -- that is the failure this palette was chosen to avoid, so check
+  the busiest interchange you can find before settling.
+</p>
 
 <div class="controls">
   <div class="ctl">
@@ -134,6 +163,10 @@
   <div class="ctl">
     <label>Zoom</label>
     <div class="zooms" id="zooms"></div>
+  </div>
+  <div class="ctl">
+    <label>Trails</label>
+    <label class="toggle"><input type="checkbox" id="showtrails" checked> Draw sample trails</label>
   </div>
 </div>
 
@@ -176,7 +209,7 @@ const CANDIDATES = [
     attrib: '&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap contributors', opts: { maxZoom: 20 } },
 
   { id: 'stadia-toner-lite', name: 'Stadia Stamen Toner Lite', kind: 'raster', key: 'stadia',
-    note: 'Near-monochrome. The orange trails pop hardest over this, but there is no landuse color at all.',
+    note: 'Near-monochrome. Trails pop hardest over this, but there is no landuse color at all.',
     url: 'https://tiles.stadiamaps.com/tiles/stamen_toner_lite/{z}/{x}/{y}{r}.png',
     attrib: '&copy; Stadia Maps &copy; Stamen Design &copy; OpenMapTiles &copy; OpenStreetMap contributors', opts: { maxZoom: 20 } },
 
@@ -211,6 +244,94 @@ const CANDIDATES = [
             'https://tiles.versatiles.org/assets/styles/colorful.json'],
     attrib: '&copy; VersaTiles &copy; OpenStreetMap contributors' }
 ];
+
+/* ============================================================
+   SAMPLE TRAILS
+   Mirrors the drawing constants in host-tracker.html. If you change them
+   there, change them here or the preview stops telling the truth.
+   ============================================================ */
+const TRAIL_PALETTE = [
+  { call: 'K8JKU', color: '#0B6BCB' },
+  { call: 'N8JRD', color: '#C1121F' },
+  { call: 'W8KNX', color: '#8E24AA' },
+];
+const T = {
+  width: 5.5, casingWidth: 8.5, casingColor: '#0d1620',
+  casingAlpha: 0.62, casingAlphaOld: 0.45,
+  alphaFresh: 0.95, alphaOld: 0.60, gamma: 1.15, taperOld: 0.72,
+};
+let showTrails = true;
+
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a.toFixed(3)})`;
+}
+
+// Deterministic wandering tracks around the view centre, sized in degrees so
+// they stay a sensible on-screen length as the zoom preset changes.
+function sampleTrack(seed, zoom) {
+  const span = 0.9 / Math.pow(2, zoom - 9);
+  let r = seed * 9301;
+  const rnd = () => ((r = (r * 9301 + 49297) % 233280) / 233280);
+  const pts = [];
+  let lat = view.center[0] + (rnd() - 0.5) * span;
+  let lng = view.center[1] + (rnd() - 0.5) * span;
+  let bLat = (rnd() - 0.5), bLng = (rnd() - 0.5);
+  for (let i = 0; i < 70; i++) {
+    bLat += (rnd() - 0.5) * 0.5; bLng += (rnd() - 0.5) * 0.5;
+    lat += bLat * span * 0.035; lng += bLng * span * 0.05;
+    pts.push([lat, lng]);
+  }
+  return pts;
+}
+
+function drawTrailsOn(entry) {
+  const map = entry.map;
+  let cv = entry.canvas;
+  if (!cv) {
+    cv = entry.canvas = document.createElement('canvas');
+    cv.className = 'trails';
+    map.getContainer().appendChild(cv);
+  }
+  const w = map.getContainer().clientWidth, h = map.getContainer().clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  if (cv.width !== w * dpr || cv.height !== h * dpr) {
+    cv.width = w * dpr; cv.height = h * dpr;
+    cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  }
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  if (!showTrails) return;
+
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  TRAIL_PALETTE.forEach((host, hi) => {
+    const proj = sampleTrack(hi + 1, map.getZoom())
+      .map(p => map.latLngToContainerPoint(p));
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 1; i < proj.length; i++) {
+        const fade = Math.pow(1 - (i / proj.length), T.gamma);   // head is newest
+        const alpha = pass === 0
+          ? T.casingAlphaOld + (T.casingAlpha - T.casingAlphaOld) * (1 - fade)
+          : T.alphaOld + (T.alphaFresh - T.alphaOld) * (1 - fade);
+        c.strokeStyle = hexA(pass === 0 ? T.casingColor : host.color, alpha);
+        c.lineWidth = (pass === 0 ? T.casingWidth : T.width) *
+          (T.taperOld + (1 - T.taperOld) * (1 - fade));
+        c.beginPath();
+        c.moveTo(proj[i-1].x, proj[i-1].y);
+        c.lineTo(proj[i].x, proj[i].y);
+        c.stroke();
+      }
+    }
+    const head = proj[proj.length - 1];
+    c.fillStyle = hexA(T.casingColor, 0.6);
+    c.beginPath(); c.arc(head.x, head.y, 9, 0, Math.PI*2); c.fill();
+    c.fillStyle = hexA(host.color, 0.98);
+    c.beginPath(); c.arc(head.x, head.y, 6, 0, Math.PI*2); c.fill();
+  });
+}
+
+function redrawAllTrails() { maps.forEach(drawTrailsOn); }
 
 // Zoom presets. 14 is the board's FIT_MAX_ZOOM, 11 is a typical fitted rove.
 const ZOOMS = [8, 11, 14, 16];
@@ -289,6 +410,11 @@ function buildCard(cand) {
         (cand.key ? cand.key + ' key' : 'no key') + '</span>' +
     '</div>' +
     '<div class="note"></div>' +
+    '<div class="swatches">' +
+      TRAIL_PALETTE.map(h =>
+        '<span class="swatch"><i style="background:' + h.color + '"></i>' + h.call + '</span>'
+      ).join('') +
+    '</div>' +
     '<div class="map"></div>' +
     '<div class="foot"><code></code><span class="status">idle</span></div>';
   card.querySelector('h2').textContent = cand.name;
@@ -320,8 +446,10 @@ function initMapFor(cand, holder, setStatus) {
     inertia: false, zoomSnap: 0.1
   }).setView(view.center, view.zoom);
 
-  const entry = { cand: cand, map: map, setStatus: setStatus, layer: null };
+  const entry = { cand: cand, map: map, setStatus: setStatus, layer: null, canvas: null };
   maps.push(entry);
+  map.on('move zoom resize', () => drawTrailsOn(entry));
+  drawTrailsOn(entry);
 
   if (cand.kind === 'vector') {
     setStatus('loading maplibre...');
@@ -379,7 +507,7 @@ function reloadKeyed() {
 function setZoom(z) {
   view.zoom = z;
   document.querySelectorAll('#zooms button').forEach(b => b.classList.toggle('on', +b.dataset.z === z));
-  maps.forEach(e => e.map.setView(view.center, z));
+  maps.forEach(e => { e.map.setView(view.center, z); drawTrailsOn(e); });
 }
 
 /* ---------- Boot ---------- */
@@ -390,6 +518,10 @@ ZOOMS.forEach(z => {
   document.getElementById('zooms').appendChild(b);
 });
 document.getElementById('apply').onclick = reloadKeyed;
+document.getElementById('showtrails').onchange = (e) => {
+  showTrails = e.target.checked;
+  redrawAllTrails();
+};
 
 // Center on the newest host fix so the preview shows the ground the board shows.
 fetch('host-tracker.json', { cache: 'no-store' })

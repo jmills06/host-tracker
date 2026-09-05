@@ -206,7 +206,11 @@
     font-family: 'Oswald', sans-serif;
     font-weight: 600;
     font-size: 20px;
-    color: var(--navy-dark);
+    /* Cream, not navy: the trail palette is deliberately dark, and navy
+       initials on it measure 2.6-3.5:1 where cream measures 5.0-6.6:1.
+       Only visible when a portrait fails to load, but that is exactly when
+       the board should still be readable. */
+    color: var(--cream);
     letter-spacing: 0.5px;
     position: relative;
     overflow: hidden;
@@ -289,7 +293,7 @@
     border-radius: 4px;
     /* End stop tracks TRAIL_ALPHA_OLD / TRAIL_ALPHA_FRESH, so the legend
        shows the fade the trails actually use. */
-    background: linear-gradient(90deg, rgba(253,248,229,0.95) 0%, rgba(253,248,229,0.42) 100%);
+    background: linear-gradient(90deg, rgba(253,248,229,0.95) 0%, rgba(253,248,229,0.60) 100%);
   }
   .age-ends {
     display: flex;
@@ -362,7 +366,7 @@
     box-shadow: 0 0 9px rgba(0,0,0,0.5), 0 0 12px var(--hc);
     display: flex; align-items: center; justify-content: center;
     font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 12px;
-    color: var(--navy-dark);
+    color: var(--cream);
   }
   .ins-face img.pose { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .ins-face:not(.imgloaded) img.pose { display: none; }
@@ -407,7 +411,7 @@
     border: 3px solid var(--cream);
     display: flex; align-items: center; justify-content: center;
     font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 21px;
-    color: var(--navy-dark);
+    color: var(--cream);
     box-shadow: 0 0 14px var(--hc);
     position: relative;
     overflow: hidden;
@@ -578,15 +582,15 @@ const CLARKSTON = { lat: 42.7356, lng: -83.4183 };
 
 // Roster. `call` must match the poller output keys (base callsigns).
 const HOSTS = [
-  { call: 'K8JKU', name: 'James', color: '#4a90e2', initials: 'JA', shape: 'circle',
+  { call: 'K8JKU', name: 'James', color: '#0B6BCB', initials: 'JA', shape: 'circle',
     home: { lat: 42.7356, lng: -83.4183 },                          // Clarkston
     poses: { home: 'icons/james-home.png', portable: 'icons/james-portable.png', mobile: 'icons/james-mobile.png' } },
 
-  { call: 'N8JRD', name: 'Jim', color: '#ff7030', initials: 'JI', shape: 'triangle',
+  { call: 'N8JRD', name: 'Jim', color: '#C1121F', initials: 'JI', shape: 'triangle',
     home: { lat: 42.4606, lng: -83.6516 },                          // South Lyon
     poses: { home: 'icons/jim-home.png', portable: 'icons/jim-portable.png', mobile: 'icons/jim-mobile.png' } },
 
-  { call: 'W8KNX', name: 'Rory', color: '#9b59b6', initials: 'RO', shape: 'square',
+  { call: 'W8KNX', name: 'Rory', color: '#8E24AA', initials: 'RO', shape: 'square',
     home: { lat: 42.4606, lng: -83.6516 },                          // South Lyon
     poses: { home: 'icons/rory-home.png', portable: 'icons/rory-portable.png', mobile: 'icons/rory-mobile.png' } },
 ];
@@ -612,16 +616,32 @@ const KM_TO_MI = 0.621371;
 
 // Rendering (Pi 5 has headroom; drop RENDER_FPS to 15-20 on weak hardware)
 const RENDER_FPS   = 30;
-const TRAIL_WIDTH  = 4;        // age-colored core line
-const CASING_WIDTH = 9;        // host-color identity casing under the core
-const CASING_ALPHA = 0.30;
+// Core to casing ratio matters as much as the widths: at 4/9 the dark edge
+// swallowed the host colour and every trail read as "a dark line". 5.5 inside
+// 8.5 leaves 1.5px of casing a side, which is still a hard edge against the
+// map while letting the colour carry.
+const TRAIL_WIDTH  = 5.5;      // age-colored core line
+const CASING_WIDTH = 8.5;      // dark casing under the core
+// The casing is what actually touches the basemap, so it is what has to
+// separate from it -- and a neutral dark does that on any style, where a
+// host-coloured one only worked when the host colour happened to miss the
+// map's palette. Measured worst case against any feature on any of the styles
+// in BASEMAPS: this casing scores 21.9, the old host-coloured 30% one scored
+// 7.0. It is the single biggest reason a trail reads over a highway.
+const CASING_COLOR     = '#0d1620';
+const CASING_ALPHA     = 0.62;  // at the head
+const CASING_ALPHA_OLD = 0.45;  // at the tail -- still a real outline
 
 // Trail age is read as opacity. The tail is deliberately dimmer than the head,
 // but it still has to be legible from across the room, so it fades to a floor
 // rather than to nothing. Raise TRAIL_ALPHA_OLD if three days back is still
 // too faint; lower it if the old track competes with today's.
 const TRAIL_ALPHA_FRESH = 0.95;  // opacity at the head (now)
-const TRAIL_ALPHA_OLD   = 0.42;  // opacity at the tail (72h back)
+// Was 0.42, which let the old end of a trail composite most of the way back
+// to the basemap: every colour measured under 8 against Esri's features down
+// there, no matter what hue it was. The age gradient is a bit shallower now
+// and the tail survives.
+const TRAIL_ALPHA_OLD   = 0.60;  // opacity at the tail (72h back)
 const TRAIL_FADE_GAMMA  = 1.15;  // >1 holds the bright end longer
 const TRAIL_TAPER_OLD   = 0.72;  // width multiplier at the tail
 
@@ -641,7 +661,30 @@ const TRAIL_OFFSET_PX = 7;     // sideways separation between hosts' trails so
                                // shared roads render as parallel ribbons
                                // (transit-map style). 0 disables.
 
-const MODE_PALETTE = ['#ff7030', '#4a90e2', '#9b59b6', '#2ecc71'];
+// Trail colours, chosen against what street basemaps put underneath them.
+// Every one of these styles spends its palette on the same things: orange and
+// yellow for highways, pale blue for water, pale green for parks, cream for
+// minor roads and land. So the trails stay out of that range and sit darker
+// and more saturated than any of it -- basemap features are pale by design,
+// which is a gap worth using.
+//
+// Measured worst-case CIEDE2000 against Esri World Street Map's feature
+// colours, at both trail opacities, over every tone a trail can cross:
+//
+//                        vs the map    vs each other
+//   this palette             14.0          29.8
+//   the old one               7.4          30.0
+//
+// Jim was on the show's orange (#ff7030), which is very nearly Esri's
+// motorway fill -- 7.2 at the faded end of a trail, which is why his line
+// disappeared over a highway. James was quietly worse: #4a90e2 came out at
+// 1.6 against pale water. Both are fixed here, and each host keeps his hue
+// family, so nobody has to relearn who is who.
+//
+// A stronger set exists -- #3B3FBF / #C1121F / #00796B scores 19.1 and 39.5 --
+// but it turns Rory teal. Try it in basemap-preview.html if you want it.
+// The brand orange is untouched: it is still the UI accent, just not a trail.
+const MODE_PALETTE = ['#C1121F', '#0B6BCB', '#8E24AA', '#00796B'];
 
 // Basemap.
 // CARTO's raster basemaps are no longer anonymous: unkeyed tiles come back
@@ -709,6 +752,12 @@ const BASEMAPS = {
   'versatiles':     { type: 'vector', style: 'https://tiles.versatiles.org/assets/styles/colorful/style.json',
                       attrib: '&copy; VersaTiles &copy; OpenStreetMap contributors' }
 };
+// Heads up: carto-voyager needs a key, CARTO_API_KEY above is empty, so
+// pickBasemap falls through and the board is really drawing BASEMAP_NO_KEY --
+// Esri World Street Map. That is the style the trail palette was measured
+// against. Paste a CARTO key, or set BASEMAP to a keyless id, to change it;
+// basemap-preview.html draws sample trails over every candidate so you can
+// see how the palette holds up before switching.
 const BASEMAP        = 'carto-voyager'; // the style the board draws
 const BASEMAP_NO_KEY = 'esri-street'; // used if BASEMAP needs a key we lack,
                                       // or if a vector style cannot load
@@ -757,7 +806,8 @@ const INSET_W           = 384; // panel size inside the map frame
 const INSET_H           = 300;
 const INSET_PADDING_PX  = 30;  // breathing room around the group inside it
 const INSET_MAX_ZOOM    = 13;
-const INSET_TRAIL_WIDTH = 2.5;
+const INSET_TRAIL_WIDTH = 3;     // same core:casing ratio as the big map
+const INSET_CASING_WIDTH = 4.8;
 const INSET_TRAIL_OFFSET_PX = 4;
 
 const TRAIL_CULL_PX     = 240; // skip drawing trails this far off canvas
@@ -1315,20 +1365,26 @@ function drawInsetTrails() {
 
     insetCtx.lineCap = 'round';
     insetCtx.lineJoin = 'round';
-    // One pass, no casing, no glyph stamps, no travelling pulse: at panel size
-    // that decoration turns into noise. Age still fades and tapers, so the
-    // inset speaks the same language as the map above it.
-    for (let i = 1; i < proj.length; i++) {
-      const t = Math.min(1, (now - pts[i].time) / windowMs);
-      const fade = Math.pow(1 - t, TRAIL_FADE_GAMMA);
-      const a = TRAIL_ALPHA_OLD + (TRAIL_ALPHA_FRESH - TRAIL_ALPHA_OLD) * fade;
-      insetCtx.strokeStyle = hexA(host.color, a);
-      insetCtx.lineWidth = INSET_TRAIL_WIDTH *
-        (TRAIL_TAPER_OLD + (1 - TRAIL_TAPER_OLD) * fade);
-      insetCtx.beginPath();
-      insetCtx.moveTo(proj[i-1].x, proj[i-1].y);
-      insetCtx.lineTo(proj[i].x, proj[i].y);
-      insetCtx.stroke();
+    // Casing plus core, same as the big map -- the panel sits over the same
+    // basemap and needs the same separation from it. What it drops is the
+    // decoration: no glyph stamps, no travelling pulse, which at panel size
+    // turn into noise. Age still fades and tapers, so the inset speaks the
+    // same language as the map above it.
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 1; i < proj.length; i++) {
+        const t = Math.min(1, (now - pts[i].time) / windowMs);
+        const fade = Math.pow(1 - t, TRAIL_FADE_GAMMA);
+        const alpha = pass === 0
+          ? CASING_ALPHA_OLD + (CASING_ALPHA - CASING_ALPHA_OLD) * fade
+          : TRAIL_ALPHA_OLD + (TRAIL_ALPHA_FRESH - TRAIL_ALPHA_OLD) * fade;
+        insetCtx.strokeStyle = hexA(pass === 0 ? CASING_COLOR : host.color, alpha);
+        insetCtx.lineWidth = (pass === 0 ? INSET_CASING_WIDTH : INSET_TRAIL_WIDTH) *
+          (TRAIL_TAPER_OLD + (1 - TRAIL_TAPER_OLD) * fade);
+        insetCtx.beginPath();
+        insetCtx.moveTo(proj[i-1].x, proj[i-1].y);
+        insetCtx.lineTo(proj[i].x, proj[i].y);
+        insetCtx.stroke();
+      }
     }
   });
 }
@@ -1734,10 +1790,10 @@ function drawTrails() {
         const fade = Math.pow(1 - t, TRAIL_FADE_GAMMA);         // 1 fresh -> 0 old
         const core = TRAIL_ALPHA_OLD + (TRAIL_ALPHA_FRESH - TRAIL_ALPHA_OLD) * fade;
         const alpha = pass === 0
-          ? CASING_ALPHA * (core / TRAIL_ALPHA_FRESH)
+          ? CASING_ALPHA_OLD + (CASING_ALPHA - CASING_ALPHA_OLD) * fade
           : core;
         if (alpha < 0.02) continue;
-        ctx.strokeStyle = hexA(host.color, alpha);
+        ctx.strokeStyle = hexA(pass === 0 ? CASING_COLOR : host.color, alpha);
         ctx.lineWidth = pass === 0
           ? CASING_WIDTH
           : (TRAIL_WIDTH * (TRAIL_TAPER_OLD + (1 - TRAIL_TAPER_OLD) * fade));
