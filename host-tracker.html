@@ -1291,6 +1291,13 @@ function setInset(list) {
   const c = b.getCenter();
   document.querySelector('[data-inset-place]').textContent =
     nearestCity({ lat: c.lat, lng: c.lng });
+
+  // Draw now rather than waiting for the next animation frame. The panel is
+  // already on screen at this point, and when it reopens on a different pair
+  // than last time the leftover markers would show for a frame at positions
+  // belonging to the old view.
+  drawInsetTrails();
+  drawInsetAvatars();
 }
 
 function drawInsetTrails() {
