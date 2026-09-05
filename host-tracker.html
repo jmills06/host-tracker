@@ -128,12 +128,67 @@
       radial-gradient(125% 95% at 50% 50%, transparent 68%, rgba(13,22,32,0.20) 100%);
   }
 
-  #trails, #avatars {
+  #trails, #avatars, #offmap {
     position: absolute; inset: 0;
     pointer-events: none;
   }
   #trails { z-index: 400; }
   #avatars { z-index: 401; }
+  #offmap { z-index: 402; }
+
+  /* ---------- Off-map edge beacons ----------
+     When one host is a thousand miles from the rest, framing everybody would
+     zoom out until nobody is readable. The map stays on the group instead and
+     the far host rides the frame edge as a chip: who, how far, which way. */
+  .edge-beacon {
+    position: absolute;
+    left: 0; top: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 13px 6px 7px;
+    border-radius: 999px;
+    background: rgba(13,22,32,0.90);
+    border: 1px solid var(--hc);
+    box-shadow: 0 6px 22px rgba(0,0,0,0.55), 0 0 16px -4px var(--hc);
+    white-space: nowrap;
+    will-change: transform;
+  }
+  .edge-beacon.flip { flex-direction: row-reverse; padding: 6px 7px 6px 13px; }
+  .edge-beacon .eb-arrow {
+    flex: 0 0 auto;
+    width: 0; height: 0;
+    border: 7px solid transparent;
+    border-left: 11px solid var(--hc);
+    transform: rotate(var(--ang, 0deg));
+    transform-origin: 35% 50%;
+  }
+  .edge-beacon .eb-face {
+    flex: 0 0 auto;
+    position: relative;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--hc);
+    border: 2px solid var(--cream);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 12px;
+    color: var(--navy-dark);
+  }
+  .edge-beacon .eb-face img.pose { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .edge-beacon .eb-face:not(.imgloaded) img.pose { display: none; }
+  .edge-beacon .eb-face.imgloaded .ini { display: none; }
+  .edge-beacon .eb-call {
+    font-family: 'Oswald', sans-serif; font-weight: 600;
+    font-size: 15px; letter-spacing: 0.06em;
+    color: var(--cream); line-height: 1.05;
+  }
+  .edge-beacon .eb-dist {
+    font-family: 'Oswald', sans-serif; font-weight: 400;
+    font-size: 12px; letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--cream-80); line-height: 1.25;
+  }
+  .edge-beacon.dim { opacity: 0.7; }
 
   /* ---------- Host markers ---------- */
   .host-marker {
@@ -343,6 +398,26 @@
   /* Border is currentColor, so this mutes the ring with the text. Without it
      the pill outshines the live hosts' pills on the quietest card. */
   .card.nodata .state-pill { color: var(--cream-50); }
+
+  /* Says out loud why this host has no dot on the map above -- without it a
+     viewer just reads the board as broken.
+     Rides the name line rather than getting a row of its own: the who column
+     is a 1fr grid track squeezed by the metrics, and anything that wraps in
+     here drags the card taller and folds the heard line into three lines.
+     Short on purpose -- where they actually are is already on the state pill
+     beside it, and how far off the frame is on the beacon up in the map. */
+  .card .offmap {
+    flex: 0 0 auto;
+    padding: 1px 9px 2px;
+    border-radius: 999px;
+    border: 1px solid var(--hc);
+    background: rgba(255,255,255,0.06);
+    color: var(--cream-80);
+    font-family: 'Oswald', sans-serif; font-weight: 500;
+    font-size: 12px; letter-spacing: 0.10em; text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .card .offmap[hidden] { display: none; }
   .card .who { min-width: 0; }
   .card .call {
     font-family: 'Oswald', sans-serif;
@@ -351,7 +426,8 @@
     letter-spacing: 1px;
     line-height: 1;
   }
-  .card .name { font-size: 18px; color: var(--cream-80); margin-top: 5px; letter-spacing: 0.3px; }
+  .card .nameline { display: flex; align-items: center; gap: 9px; margin-top: 5px; }
+  .card .name { font-size: 18px; color: var(--cream-80); letter-spacing: 0.3px; }
   .card .heard { font-size: 15px; color: var(--cream-50); margin-top: 3px; letter-spacing: 0.3px; text-transform: uppercase; }
 
   .card .metrics {
@@ -444,6 +520,7 @@
     <div id="map"></div>
     <canvas id="trails"></canvas>
     <div id="avatars"></div>
+    <div id="offmap"></div>
 
     <div class="window-badge">Last <b>72</b> hours</div>
 
@@ -623,6 +700,38 @@ const FIT_PADDING_PX    = 80;
 const FIT_FALLBACK_ZOOM = 11;
 const AUTO_REFIT        = true;
 
+// Outlier handling. One host a long way from the rest used to drag the fit
+// out to half a continent, at which point nobody on the board is legible.
+// Instead the map refuses to zoom out past FIT_MIN_ZOOM: it frames whoever
+// still fits, and hands the stragglers to the edge beacons below.
+//
+// The number is a proxy for "can I still tell the locals apart". Measured on
+// this 1000x1280 map frame, with two hosts 30 miles apart (Clarkston / Novi)
+// and a third roaming, the fit zoom and the gap between the two local markers
+// come out as:
+//
+//    Traverse City   z9.0   128px      Nashville   z7.5   45px
+//    Columbus OH     z8.7   104px      Atlanta     z7.1   34px
+//    Dayton OH       z8.6    97px      Miami       z6.2   18px
+//    Chicago         z8.1    69px      Denver      z5.7   13px
+//    Houghton (UP)   z7.8    56px
+//
+// A host marker is ~62px across, so anything under z8 has the locals sitting
+// on top of each other -- which is exactly the failure this fixes. Raise the
+// floor to hold a tighter view, lower it (7.7 puts the UP back on the board)
+// to let more of the state in. FIT_MIN_ZOOM = 0 restores the old behaviour of
+// always framing everybody.
+const FIT_MIN_ZOOM      = 8;
+// Hosts already framed out have to beat the floor by this much to get back
+// on, so somebody idling right at the line does not flicker on and off the
+// map every time a beacon lands.
+const FIT_HYSTERESIS    = 0.35;
+const OFFMAP_EDGE_PX    = 46;  // marker this close to the frame counts as off
+const OFFMAP_INSET_PX   = 16;  // how far in from the frame the chips ride
+const TRAIL_CULL_PX     = 240; // skip drawing trails this far off canvas
+const CITY_MAX_KM       = 120; // past this the CITIES list is guessing, so
+                               // the pill switches to a grid square
+
 /* ============================================================
    STATE
    ============================================================ */
@@ -632,6 +741,15 @@ let dataGeneratedMs = 0;
 let sourceLabel = 'Simulated data';
 let lastSignature = '';
 let lastFitSig = '';
+let offMapLayer;
+const beaconEls = {};
+// call -> { text } for every host currently outside the frame, absent for
+// everyone on it. drawAvatars owns it; the cards read it so a host with no
+// dot on the map still gets explained down in the roster.
+let offMapState = {};
+// Hosts frameBounds is currently leaving out of the fit. Kept between runs
+// purely to give the re-admission threshold something to hang on to.
+let framedOut = {};
 let tickCount = 0;
 let lastDrawMs = 0;
 const FRAME_MIN_MS = 1000 / RENDER_FPS;
@@ -646,6 +764,28 @@ function haversineKm(a, b) {
   const la1 = a.lat * Math.PI / 180, la2 = b.lat * Math.PI / 180;
   const h = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+// Maidenhead locator. Out past the CITIES list a grid square is the honest
+// answer to "where is he", it is what a ham would say on the air anyway, and
+// unlike a spelled-out distance it stays short enough not to blow the card's
+// state pill out and squeeze the column beside it.
+function gridSquare(p) {
+  const lon = p.lng + 180, lat = p.lat + 90;
+  const FIELD = 'ABCDEFGHIJKLMNOPQR', SUB = 'abcdefghijklmnopqrstuvwx';
+  return FIELD[Math.floor(lon / 20)] + FIELD[Math.floor(lat / 10)] +
+         Math.floor((lon % 20) / 2) + Math.floor(lat % 10) +
+         SUB[Math.floor((lon % 2) * 12)] + SUB[Math.floor((lat % 1) * 24)];
+}
+
+function bearingDeg(a, b) {
+  const la1 = a.lat * Math.PI / 180, la2 = b.lat * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const y = Math.sin(dLng) * Math.cos(la2);
+  const x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+function milesText(mi) {
+  return (mi >= 10 ? Math.round(mi).toLocaleString() : mi.toFixed(1)) + ' mi';
 }
 function compass(deg) {
   const dirs = ['N','NE','E','SE','S','SW','W','NW'];
@@ -706,7 +846,12 @@ function nearestCity(p) {
     const km = haversineKm(p, { lat, lng });
     if (km < bestKm) { bestKm = km; best = name; }
   }
-  return best || '--';
+  if (!best) return '--';
+  // The list is Michigan-centric on purpose. A host in Florida would otherwise
+  // be labelled with whichever Michigan town happened to be least far away,
+  // which reads as a bug. Past CITY_MAX_KM, fall back to the grid square.
+  if (bestKm > CITY_MAX_KM) return 'Grid ' + gridSquare(p).slice(0, 4);
+  return best;
 }
 
 /* ============================================================
@@ -765,13 +910,6 @@ function sampleSchedule(sched, minute) {
     }
   }
   return { lat: last[1], lng: last[2] };
-}
-
-function bearingDeg(a, b) {
-  const y = Math.sin((b.lng-a.lng)*Math.PI/180) * Math.cos(b.lat*Math.PI/180);
-  const x = Math.cos(a.lat*Math.PI/180)*Math.sin(b.lat*Math.PI/180) -
-            Math.sin(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.cos((b.lng-a.lng)*Math.PI/180);
-  return (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
 }
 
 function buildSimulated() {
@@ -1032,6 +1170,7 @@ function initMap() {
   trailCanvas = document.getElementById('trails');
   ctx = trailCanvas.getContext('2d');
   avatarLayer = document.getElementById('avatars');
+  offMapLayer = document.getElementById('offmap');
 
   sizeCanvas();
   window.addEventListener('resize', () => { sizeCanvas(); frameBounds(); });
@@ -1048,17 +1187,28 @@ function sizeCanvas() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-function getFitPoints() {
-  const pts = [];
-  hosts.forEach(h => {
-    if (!h.track || !h.track.length) return;
-    if (FIT_MODE === 'trails') h.track.forEach(p => pts.push([p.lat, p.lng]));
-    else {
-      const last = h.track[h.track.length - 1];
-      pts.push([last.lat, last.lng]);
-    }
-  });
-  return pts;
+function hostFitPoints(h) {
+  if (!h.track || !h.track.length) return [];
+  if (FIT_MODE === 'trails') return h.track.map(p => [p.lat, p.lng]);
+  const last = h.track[h.track.length - 1];
+  return [[last.lat, last.lng]];
+}
+
+// Which host is the odd one out? Score each by the total distance to everyone
+// else: two hosts in Oakland County both score low, the one in Florida scores
+// huge. Ties (a two-host board, where both sums are identical) go to whoever
+// is further from home, so the board stays anchored where the show lives.
+function mostOutlying(list) {
+  const sums = list.map(a => list.reduce((t, b) => t + haversineKm(a.latest, b.latest), 0));
+  let worst = 0;
+  for (let i = 1; i < list.length; i++) {
+    const d = sums[i] - sums[worst];
+    if (d > 1) worst = i;
+    else if (Math.abs(d) <= 1 &&
+             haversineKm(list[i].latest, CLARKSTON) >
+             haversineKm(list[worst].latest, CLARKSTON)) worst = i;
+  }
+  return worst;
 }
 
 function fitSignature() {
@@ -1069,12 +1219,40 @@ function fitSignature() {
 }
 
 function frameBounds() {
-  const pts = getFitPoints();
-  if (!pts.length) {
+  const live = hosts
+    .filter(h => h.track && h.track.length)
+    .map(h => ({ h, latest: h.track[h.track.length - 1] }));
+
+  if (!live.length) {
     map.setView([CLARKSTON.lat, CLARKSTON.lng], FIT_FALLBACK_ZOOM);
     return;
   }
-  const b = L.latLngBounds(pts);
+
+  // fitBounds applies FIT_PADDING_PX on each side, so the zoom probe has to
+  // charge double or it green-lights a fit that lands under the floor.
+  const pad = L.point(FIT_PADDING_PX * 2, FIT_PADDING_PX * 2);
+  const boundsOf = set => L.latLngBounds(
+    set.reduce((acc, e) => acc.concat(hostFitPoints(e.h)), []));
+
+  let b = boundsOf(live);
+  // Somebody two states away is a rare event, but it used to cost the whole
+  // board: fitting them dropped the zoom until the rest of us were a single
+  // pixel cluster. Peel the outlier off until what is left fits at a zoom you
+  // can actually read; drawAvatars puts the peeled hosts on the frame edge.
+  const floor = () => FIT_MIN_ZOOM +
+    (live.some(e => framedOut[e.h.call]) ? FIT_HYSTERESIS : 0);
+  while (live.length > 1 && map.getBoundsZoom(b, false, pad) < floor()) {
+    live.splice(mostOutlying(live), 1);
+    b = boundsOf(live);
+  }
+
+  const kept = {};
+  live.forEach(e => { kept[e.h.call] = true; });
+  framedOut = {};
+  hosts.forEach(h => {
+    if (h.track && h.track.length && !kept[h.call]) framedOut[h.call] = true;
+  });
+
   if (b.getNorthEast().equals(b.getSouthWest())) {
     map.setView(b.getCenter(), FIT_MAX_ZOOM, { animate: false });
   } else {
@@ -1101,7 +1279,10 @@ function buildCards() {
       <div class="avatar"><img class="pose" alt=""><span class="ini">${h.initials || ''}</span></div>
       <div class="who">
         <div class="call">${h.call}</div>
-        <div class="name">${h.name}</div>
+        <div class="nameline">
+          <span class="name">${h.name}</span>
+          <span class="offmap" data-offmap hidden>Off map</span>
+        </div>
         <div class="heard" data-heard>--</div>
       </div>
       <div class="metrics">
@@ -1328,6 +1509,20 @@ function drawTrails() {
     const off = (hi - (hosts.length - 1) / 2) * TRAIL_OFFSET_PX;
     const proj = offsetPolyline(pts.map(p => ll(p)), off);
 
+    // A host framed out of the view projects hundreds of thousands of pixels
+    // off canvas. None of it can land on the board, so skip the whole host
+    // rather than stroking a few hundred invisible segments every frame --
+    // this thing runs 24/7 on a stick PC. The edge beacon carries them.
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let i = 0; i < proj.length; i++) {
+      if (proj[i].x < minX) minX = proj[i].x;
+      if (proj[i].x > maxX) maxX = proj[i].x;
+      if (proj[i].y < minY) minY = proj[i].y;
+      if (proj[i].y > maxY) maxY = proj[i].y;
+    }
+    if (maxX < -TRAIL_CULL_PX || minX > w + TRAIL_CULL_PX ||
+        maxY < -TRAIL_CULL_PX || minY > h + TRAIL_CULL_PX) return;
+
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
@@ -1421,6 +1616,9 @@ function drawTrails() {
 /* ---------- avatars (always at the latest position) ---------- */
 const markerEls = {};
 function drawAvatars() {
+  const w = avatarLayer.clientWidth, h = avatarLayer.clientHeight;
+  const strays = [];
+
   hosts.forEach(host => {
     let el = markerEls[host.call];
     if (!el) {
@@ -1439,9 +1637,18 @@ function drawAvatars() {
     }
     const d = deriveHost(host);
     if (d.empty) { el.style.display = 'none'; return; }
-    el.style.display = '';
 
     const pt = ll(d.latest);
+    // Off the frame, or close enough to the edge that the marker would be a
+    // half-clipped smear. Either way it belongs to the beacon rail, not here.
+    if (pt.x < OFFMAP_EDGE_PX || pt.y < OFFMAP_EDGE_PX ||
+        pt.x > w - OFFMAP_EDGE_PX || pt.y > h - OFFMAP_EDGE_PX) {
+      el.style.display = 'none';
+      strays.push({ host, d, pt });
+      return;
+    }
+
+    el.style.display = '';
     el.style.transform = `translate3d(${pt.x}px, ${pt.y}px, 0)`;
     el.querySelector('.host-beam').style.setProperty('--course', (d.latest.course||0) + 'deg');
 
@@ -1450,6 +1657,95 @@ function drawAvatars() {
     el.classList.toggle('rolling', d.state === 'ROLLING');
     el.classList.toggle('dim', d.state === 'NOTHEARD');
   });
+
+  drawBeacons(strays, w, h);
+}
+
+/* ---------- off-map edge beacons ----------
+   Distance and bearing are measured from the middle of what the board is
+   currently showing, so the chip reads as "this far past the edge, that way"
+   rather than as a second, unrelated home-distance number. */
+function drawBeacons(strays, w, h) {
+  const c = map.getCenter();
+  const from = { lat: c.lat, lng: c.lng };
+  const cx = w / 2, cy = h / 2;
+  const seen = {}, next = {};
+
+  // Seed the collision list with the fixed map furniture so a beacon nudged
+  // onto the right-hand edge does not land on the trail-age legend.
+  const wrapBox = offMapLayer.getBoundingClientRect();
+  const placed = ['.window-badge', '.age-legend'].map(sel => {
+    const n = document.querySelector(sel);
+    if (!n) return null;
+    const r = n.getBoundingClientRect();
+    return { x: r.x - wrapBox.x + r.width / 2, y: r.y - wrapBox.y + r.height / 2,
+             bw: r.width / 2, bh: r.height / 2 };
+  }).filter(Boolean);
+
+  strays.forEach(({ host, d, pt }) => {
+    let el = beaconEls[host.call];
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'edge-beacon';
+      el.style.setProperty('--hc', host.color);
+      el.innerHTML = `
+        <div class="eb-arrow"></div>
+        <div class="eb-face"><img class="pose" alt=""><span class="ini">${host.initials || ''}</span></div>
+        <div class="eb-txt">
+          <div class="eb-call">${host.call}</div>
+          <div class="eb-dist" data-dist>--</div>
+        </div>`;
+      offMapLayer.appendChild(el);
+      beaconEls[host.call] = el;
+    }
+    seen[host.call] = true;
+    el.style.display = '';
+
+    const txt = milesText(haversineKm(from, d.latest) * KM_TO_MI) + ' ' +
+                compass(bearingDeg(from, d.latest));
+    next[host.call] = { text: txt };
+
+    setPose(el.querySelector('.eb-face'), poseFor(host, d.state));
+    el.classList.toggle('dim', d.state === 'NOTHEARD');
+
+    const dx = pt.x - cx, dy = pt.y - cy;
+    el.classList.toggle('flip', dx > 0);
+    el.style.setProperty('--ang', (Math.atan2(dy, dx) * 180 / Math.PI).toFixed(1) + 'deg');
+
+    // Measuring the chip forces a layout, so only do it when the label or the
+    // flip side actually changed -- everything else here is transform-only.
+    if (el._txt !== txt) { el._txt = txt; el.querySelector('[data-dist]').textContent = txt; }
+    if (el._txt !== el._sized || !el._bw) {
+      el._sized = el._txt;
+      el._bw = el.offsetWidth / 2;
+      el._bh = el.offsetHeight / 2;
+    }
+    const bw = el._bw, bh = el._bh;
+
+    // Walk out along the bearing to where it crosses the frame, then pull the
+    // whole chip back inside so it never hangs off a rounded corner.
+    const sx = Math.abs(dx) > 0.001 ? (cx - OFFMAP_INSET_PX) / Math.abs(dx) : Infinity;
+    const sy = Math.abs(dy) > 0.001 ? (cy - OFFMAP_INSET_PX) / Math.abs(dy) : Infinity;
+    const k = Math.min(sx, sy);
+    let x = cx + dx * k, y = cy + dy * k;
+    x = Math.min(Math.max(x, bw + OFFMAP_INSET_PX), w - bw - OFFMAP_INSET_PX);
+    y = Math.min(Math.max(y, bh + OFFMAP_INSET_PX), h - bh - OFFMAP_INSET_PX);
+
+    // Two hosts off the same edge would otherwise stack on one another.
+    placed.forEach(q => {
+      if (Math.abs(q.x - x) < q.bw + bw && Math.abs(q.y - y) < q.bh + bh + 8) {
+        y = q.y + q.bh + bh + 8;
+      }
+    });
+    if (y > h - bh - OFFMAP_INSET_PX) y = h - bh - OFFMAP_INSET_PX;
+
+    placed.push({ x, y, bw, bh });
+    el.style.transform =
+      `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0) translate(-50%, -50%)`;
+  });
+
+  for (const call in beaconEls) if (!seen[call]) beaconEls[call].style.display = 'none';
+  offMapState = next;
 }
 
 /* ============================================================
@@ -1485,6 +1781,7 @@ function masterTick() {
       card.querySelector('[data-statetext]').textContent = 'No beacons';
       card.querySelector('[data-heard]').textContent =
         'Not heard in ' + TRAIL_HOURS + 'h';
+      card.querySelector('[data-offmap]').hidden = true;
       ['[data-miles]','[data-roll]','[data-top]','[data-beacons]']
         .forEach(sel => { card.querySelector(sel).textContent = '\u2014'; });
       return;
@@ -1499,6 +1796,11 @@ function masterTick() {
       d.state === 'ROLLING' ? 'Rolling \u00b7 ' + city : city;
     card.querySelector('[data-heard]').textContent = ageText(d.ageMin);
     setPose(card.querySelector('.avatar'), poseFor(host, d.state));
+
+    // The map above only frames the group; say plainly that this host is not
+    // on it, so a missing dot never reads as a dead feed. The state pill next
+    // to this already carries how far and which way.
+    card.querySelector('[data-offmap]').hidden = !offMapState[host.call];
 
     card.querySelector('[data-miles]').innerHTML = d.miles.toFixed(1) + '<small>mi</small>';
     card.querySelector('[data-roll]').innerHTML = d.rollH >= 1
