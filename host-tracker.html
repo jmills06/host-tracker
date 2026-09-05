@@ -128,67 +128,12 @@
       radial-gradient(125% 95% at 50% 50%, transparent 68%, rgba(13,22,32,0.20) 100%);
   }
 
-  #trails, #avatars, #offmap {
+  #trails, #avatars {
     position: absolute; inset: 0;
     pointer-events: none;
   }
   #trails { z-index: 400; }
   #avatars { z-index: 401; }
-  #offmap { z-index: 402; }
-
-  /* ---------- Off-map edge beacons ----------
-     When one host is a thousand miles from the rest, framing everybody would
-     zoom out until nobody is readable. The map stays on the group instead and
-     the far host rides the frame edge as a chip: who, how far, which way. */
-  .edge-beacon {
-    position: absolute;
-    left: 0; top: 0;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 6px 13px 6px 7px;
-    border-radius: 999px;
-    background: rgba(13,22,32,0.90);
-    border: 1px solid var(--hc);
-    box-shadow: 0 6px 22px rgba(0,0,0,0.55), 0 0 16px -4px var(--hc);
-    white-space: nowrap;
-    will-change: transform;
-  }
-  .edge-beacon.flip { flex-direction: row-reverse; padding: 6px 7px 6px 13px; }
-  .edge-beacon .eb-arrow {
-    flex: 0 0 auto;
-    width: 0; height: 0;
-    border: 7px solid transparent;
-    border-left: 11px solid var(--hc);
-    transform: rotate(var(--ang, 0deg));
-    transform-origin: 35% 50%;
-  }
-  .edge-beacon .eb-face {
-    flex: 0 0 auto;
-    position: relative;
-    width: 30px; height: 30px;
-    border-radius: 50%;
-    overflow: hidden;
-    background: var(--hc);
-    border: 2px solid var(--cream);
-    display: flex; align-items: center; justify-content: center;
-    font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 12px;
-    color: var(--navy-dark);
-  }
-  .edge-beacon .eb-face img.pose { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .edge-beacon .eb-face:not(.imgloaded) img.pose { display: none; }
-  .edge-beacon .eb-face.imgloaded .ini { display: none; }
-  .edge-beacon .eb-call {
-    font-family: 'Oswald', sans-serif; font-weight: 600;
-    font-size: 15px; letter-spacing: 0.06em;
-    color: var(--cream); line-height: 1.05;
-  }
-  .edge-beacon .eb-dist {
-    font-family: 'Oswald', sans-serif; font-weight: 400;
-    font-size: 12px; letter-spacing: 0.10em; text-transform: uppercase;
-    color: var(--cream-80); line-height: 1.25;
-  }
-  .edge-beacon.dim { opacity: 0.7; }
 
   /* ---------- Host markers ---------- */
   .host-marker {
@@ -290,6 +235,11 @@
     white-space: nowrap;
   }
 
+  /* Hosts the inset has taken over. On the wide map they are stacked on top
+     of each other, so their tags collide into a smear; the panel below names
+     them properly a few inches away, and the avatar colours still say who. */
+  .host-marker.grouped .host-tag { display: none; }
+
   /* Glyph badge on the callsign tag, tying a marker to its trail. The roster
      cards do without one: down there the host colour already says who. */
   .glyph { vertical-align: -1px; margin-right: 6px; }
@@ -313,10 +263,12 @@
   }
   .window-badge b { color: var(--orange); font-weight: 600; }
 
-  /* Age scale: fresh (green) -> 3 days (red) */
+  /* Age scale: fresh (green) -> 3 days (red). Sits top-left, bracketing the
+     window badge opposite it; the bottom-left corner it used to occupy now
+     belongs to the detail inset. */
   .age-legend {
     position: absolute;
-    left: 16px; bottom: 14px;
+    left: 16px; top: 16px;
     z-index: 402;
     background: rgba(13,22,32,0.9);
     border: 1px solid rgba(255,255,255,0.12);
@@ -348,6 +300,85 @@
     text-transform: uppercase;
     color: var(--cream-50);
   }
+
+  /* ---------- Detail inset ----------
+     The wide map keeps the road-trip story -- the long line from home down to
+     wherever somebody drove. This keeps the people who stayed put legible
+     while it does. Only mounted once the group actually spreads, and the wide
+     fit reserves this corner so it never parks a host underneath the panel. */
+  #inset {
+    position: absolute;
+    left: 16px; bottom: 14px;
+    z-index: 403;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(13,22,32,0.94);
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.60);
+  }
+  #inset[hidden] { display: none; }
+  .inset-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px;
+    padding: 8px 13px 7px;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+  }
+  .inset-head .ih-tag {
+    flex: 0 0 auto;
+    font-size: 12px; font-weight: 500; letter-spacing: 2px;
+    color: var(--orange);
+  }
+  .inset-head .ih-place {
+    min-width: 0;
+    font-size: 15px; font-weight: 500; letter-spacing: 1.2px;
+    color: var(--cream);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .inset-body { position: relative; }
+  #insetmap { position: absolute; inset: 0; background: #e9eef2; }
+  #insettrails, #insetavatars {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  #insettrails { z-index: 400; }
+  #insetavatars { z-index: 401; }
+
+  .ins-marker { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+  .ins-marker .center {
+    position: absolute;
+    left: 0; top: 0;
+    transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .ins-face {
+    position: relative;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--hc);
+    border: 2px solid var(--cream);
+    box-shadow: 0 0 9px rgba(0,0,0,0.5), 0 0 12px var(--hc);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 12px;
+    color: var(--navy-dark);
+  }
+  .ins-face img.pose { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .ins-face:not(.imgloaded) img.pose { display: none; }
+  .ins-face.imgloaded .ini { display: none; }
+  .ins-tag {
+    margin-top: 3px;
+    font-family: 'Oswald', sans-serif; font-weight: 500;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--cream);
+    background: rgba(13,22,32,0.80);
+    border: 1px solid var(--hc);
+    padding: 0 6px 1px;
+    border-radius: 5px;
+    white-space: nowrap;
+  }
+  .ins-marker.dim { opacity: 0.72; }
 
   /* ---------- Bottom status cards ---------- */
   #cards {
@@ -398,26 +429,6 @@
   /* Border is currentColor, so this mutes the ring with the text. Without it
      the pill outshines the live hosts' pills on the quietest card. */
   .card.nodata .state-pill { color: var(--cream-50); }
-
-  /* Says out loud why this host has no dot on the map above -- without it a
-     viewer just reads the board as broken.
-     Rides the name line rather than getting a row of its own: the who column
-     is a 1fr grid track squeezed by the metrics, and anything that wraps in
-     here drags the card taller and folds the heard line into three lines.
-     Short on purpose -- where they actually are is already on the state pill
-     beside it, and how far off the frame is on the beacon up in the map. */
-  .card .offmap {
-    flex: 0 0 auto;
-    padding: 1px 9px 2px;
-    border-radius: 999px;
-    border: 1px solid var(--hc);
-    background: rgba(255,255,255,0.06);
-    color: var(--cream-80);
-    font-family: 'Oswald', sans-serif; font-weight: 500;
-    font-size: 12px; letter-spacing: 0.10em; text-transform: uppercase;
-    white-space: nowrap;
-  }
-  .card .offmap[hidden] { display: none; }
   .card .who { min-width: 0; }
   .card .call {
     font-family: 'Oswald', sans-serif;
@@ -426,8 +437,7 @@
     letter-spacing: 1px;
     line-height: 1;
   }
-  .card .nameline { display: flex; align-items: center; gap: 9px; margin-top: 5px; }
-  .card .name { font-size: 18px; color: var(--cream-80); letter-spacing: 0.3px; }
+  .card .name { font-size: 18px; color: var(--cream-80); margin-top: 5px; letter-spacing: 0.3px; }
   .card .heard { font-size: 15px; color: var(--cream-50); margin-top: 3px; letter-spacing: 0.3px; text-transform: uppercase; }
 
   .card .metrics {
@@ -520,7 +530,6 @@
     <div id="map"></div>
     <canvas id="trails"></canvas>
     <div id="avatars"></div>
-    <div id="offmap"></div>
 
     <div class="window-badge">Last <b>72</b> hours</div>
 
@@ -528,6 +537,18 @@
       <div class="lh">Trail age</div>
       <div class="age-bar"></div>
       <div class="age-ends"><span>Now</span><span>3 days</span></div>
+    </div>
+
+    <div id="inset" hidden>
+      <div class="inset-head">
+        <span class="ih-tag">Detail</span>
+        <span class="ih-place" data-inset-place>--</span>
+      </div>
+      <div class="inset-body">
+        <div id="insetmap"></div>
+        <canvas id="insettrails"></canvas>
+        <div id="insetavatars"></div>
+      </div>
     </div>
   </div>
 
@@ -700,34 +721,45 @@ const FIT_PADDING_PX    = 80;
 const FIT_FALLBACK_ZOOM = 11;
 const AUTO_REFIT        = true;
 
-// Outlier handling. One host a long way from the rest used to drag the fit
-// out to half a continent, at which point nobody on the board is legible.
-// Instead the map refuses to zoom out past FIT_MIN_ZOOM: it frames whoever
-// still fits, and hands the stragglers to the edge beacons below.
+// Detail inset. The main map always frames everybody -- a host on a road trip
+// two states away is half the fun of the board, and cropping them out loses
+// the long line that says so. The cost is that whoever stayed home collapses
+// into one blob at that zoom, so once the group spreads past
+// INSET_TRIGGER_MI a second little map opens in the corner, framed on
+// whoever is still together, and the wide view keeps the story.
 //
-// The number is a proxy for "can I still tell the locals apart". Measured on
-// this 1000x1280 map frame, with two hosts 30 miles apart (Clarkston / Novi)
-// and a third roaming, the fit zoom and the gap between the two local markers
-// come out as:
+// The trigger is a plain distance -- the greatest gap between any two hosts
+// right now -- because that is the thing you can judge by eye when you decide
+// the board looks wrong. For scale, from Clarkston:
 //
-//    Traverse City   z9.0   128px      Nashville   z7.5   45px
-//    Columbus OH     z8.7   104px      Atlanta     z7.1   34px
-//    Dayton OH       z8.6    97px      Miami       z6.2   18px
-//    Chicago         z8.1    69px      Denver      z5.7   13px
-//    Houghton (UP)   z7.8    56px
+//    Novi            30 mi        Chicago          240 mi
+//    Columbus OH    180 mi        Houghton (UP)    400 mi
+//    Traverse City  180 mi        Nashville        470 mi
+//    Dayton OH      210 mi        Miami          1,170 mi
 //
-// A host marker is ~62px across, so anything under z8 has the locals sitting
-// on top of each other -- which is exactly the failure this fixes. Raise the
-// floor to hold a tighter view, lower it (7.7 puts the UP back on the board)
-// to let more of the state in. FIT_MIN_ZOOM = 0 restores the old behaviour of
-// always framing everybody.
-const FIT_MIN_ZOOM      = 8;
-// Hosts already framed out have to beat the floor by this much to get back
-// on, so somebody idling right at the line does not flicker on and off the
-// map every time a beacon lands.
-const FIT_HYSTERESIS    = 0.35;
-const OFFMAP_EDGE_PX    = 46;  // marker this close to the frame counts as off
-const OFFMAP_INSET_PX   = 16;  // how far in from the frame the chips ride
+// At the default 250 the inset stays shut for a Hamvention run or a weekend
+// up in Traverse City -- the locals are still 97-128px apart up there, which
+// reads fine -- and opens for the UP and anything further. Drop it to ~150 to
+// have it open on shorter trips, raise it to keep the board plain. Set
+// INSET_ENABLE = false to turn it off entirely.
+const INSET_ENABLE      = true;
+const INSET_TRIGGER_MI  = 250;
+// Closes again a bit tighter than it opens, so a host parked near the line
+// does not pop the panel in and out every time a beacon lands.
+const INSET_CLEAR_MI    = 200;
+// Once it is open, who goes in it: the hosts whose own span is inside this
+// fraction of the board's full spread. Deliberately a ratio and not a second
+// distance, because being crushed is relative -- two hosts 200 miles apart
+// are one blob on a view of the whole country and perfectly separate on a
+// view of two states. Leave it alone; INSET_TRIGGER_MI is the knob.
+const INSET_GROUP_FRACTION = 0.25;
+const INSET_W           = 384; // panel size inside the map frame
+const INSET_H           = 300;
+const INSET_PADDING_PX  = 30;  // breathing room around the group inside it
+const INSET_MAX_ZOOM    = 13;
+const INSET_TRAIL_WIDTH = 2.5;
+const INSET_TRAIL_OFFSET_PX = 4;
+
 const TRAIL_CULL_PX     = 240; // skip drawing trails this far off canvas
 const CITY_MAX_KM       = 120; // past this the CITIES list is guessing, so
                                // the pill switches to a grid square
@@ -741,15 +773,13 @@ let dataGeneratedMs = 0;
 let sourceLabel = 'Simulated data';
 let lastSignature = '';
 let lastFitSig = '';
-let offMapLayer;
-const beaconEls = {};
-// call -> { text } for every host currently outside the frame, absent for
-// everyone on it. drawAvatars owns it; the cards read it so a host with no
-// dot on the map still gets explained down in the roster.
-let offMapState = {};
-// Hosts frameBounds is currently leaving out of the fit. Kept between runs
-// purely to give the re-admission threshold something to hang on to.
-let framedOut = {};
+let insetMap, insetCanvas, insetCtx, insetAvatarLayer;
+// Callsigns, not host objects: applyData rebuilds the whole hosts array on
+// every poll, and frameBounds only re-runs when the fit signature moves, so
+// anything holding an object reference here would quietly go stale and the
+// inset would freeze on an old track. Empty means the panel is shut, which is
+// also what tells frameBounds which side of the hysteresis it is on.
+let insetHosts = [];
 let tickCount = 0;
 let lastDrawMs = 0;
 const FRAME_MIN_MS = 1000 / RENDER_FPS;
@@ -783,9 +813,6 @@ function bearingDeg(a, b) {
   const y = Math.sin(dLng) * Math.cos(la2);
   const x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLng);
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-}
-function milesText(mi) {
-  return (mi >= 10 ? Math.round(mi).toLocaleString() : mi.toFixed(1)) + ' mi';
 }
 function compass(deg) {
   const dirs = ['N','NE','E','SE','S','SW','W','NW'];
@@ -1170,10 +1197,13 @@ function initMap() {
   trailCanvas = document.getElementById('trails');
   ctx = trailCanvas.getContext('2d');
   avatarLayer = document.getElementById('avatars');
-  offMapLayer = document.getElementById('offmap');
 
   sizeCanvas();
-  window.addEventListener('resize', () => { sizeCanvas(); frameBounds(); });
+  window.addEventListener('resize', () => {
+    sizeCanvas();
+    if (insetMap) { insetMap.invalidateSize(); sizeInsetCanvas(); }
+    frameBounds();
+  });
 }
 
 function sizeCanvas() {
@@ -1187,11 +1217,168 @@ function sizeCanvas() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
+/* ============================================================
+   DETAIL INSET
+   A second little map, framed on whoever is still together, so the wide view
+   can keep somebody's road trip on screen without the rest of us collapsing
+   into one dot. Mounted lazily -- a board where nobody ever leaves the county
+   never pays for a second basemap.
+   ============================================================ */
+function initInsetMap() {
+  const panel = document.getElementById('inset');
+  panel.style.width = INSET_W + 'px';
+  panel.querySelector('.inset-body').style.height = INSET_H + 'px';
+
+  insetMap = L.map('insetmap', {
+    zoomControl: false, attributionControl: false,  // the big map carries it
+    dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+    boxZoom: false, keyboard: false, touchZoom: false, tap: false,
+    inertia: false, zoomSnap: 0.1
+  });
+  addBaseLayer(insetMap);
+
+  insetCanvas = document.getElementById('insettrails');
+  insetCtx = insetCanvas.getContext('2d');
+  insetAvatarLayer = document.getElementById('insetavatars');
+  sizeInsetCanvas();
+}
+
+function sizeInsetCanvas() {
+  const body = insetCanvas.parentElement;
+  const w = body.clientWidth, h = body.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  insetCanvas.width = w * dpr;
+  insetCanvas.height = h * dpr;
+  insetCanvas.style.width = w + 'px';
+  insetCanvas.style.height = h + 'px';
+  insetCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// The live host objects the inset is framed on, resolved fresh from whatever
+// applyData last built.
+function insetRoster() {
+  return insetHosts
+    .map(call => hosts.find(h => h.call === call))
+    .filter(Boolean);
+}
+
+// Pass the hosts to frame, or null to shut the panel. Fewer than two is the
+// same as null: a lone host is a lone dot, and a dot is legible anywhere on
+// the wide map without help.
+function setInset(list) {
+  const panel = document.getElementById('inset');
+  if (!list || list.length < 2) {
+    insetHosts = [];
+    panel.hidden = true;
+    return;
+  }
+  const opening = panel.hidden;
+  panel.hidden = false;                      // Leaflet needs a laid-out box
+  if (!insetMap) initInsetMap();
+  else if (opening) { insetMap.invalidateSize(); sizeInsetCanvas(); }
+  insetHosts = list.map(h => h.call);
+
+  const b = L.latLngBounds(list.reduce((acc, h) => acc.concat(hostFitPoints(h)), []));
+  if (b.getNorthEast().equals(b.getSouthWest())) {
+    insetMap.setView(b.getCenter(), INSET_MAX_ZOOM, { animate: false });
+  } else {
+    insetMap.fitBounds(b, {
+      padding: [INSET_PADDING_PX, INSET_PADDING_PX],
+      maxZoom: INSET_MAX_ZOOM,
+      animate: false
+    });
+  }
+  const c = b.getCenter();
+  document.querySelector('[data-inset-place]').textContent =
+    nearestCity({ lat: c.lat, lng: c.lng });
+}
+
+function drawInsetTrails() {
+  const w = insetCanvas.clientWidth, h = insetCanvas.clientHeight;
+  insetCtx.clearRect(0, 0, w, h);
+  const now = Date.now();
+  const windowMs = TRAIL_HOURS * 3600 * 1000;
+  const roster = insetRoster();
+
+  roster.forEach((host, hi) => {
+    const pts = host.track;
+    if (!pts || pts.length < 2) return;
+    const off = (hi - (roster.length - 1) / 2) * INSET_TRAIL_OFFSET_PX;
+    const proj = offsetPolyline(pts.map(p => ll(p, insetMap)), off);
+
+    insetCtx.lineCap = 'round';
+    insetCtx.lineJoin = 'round';
+    // One pass, no casing, no glyph stamps, no travelling pulse: at panel size
+    // that decoration turns into noise. Age still fades and tapers, so the
+    // inset speaks the same language as the map above it.
+    for (let i = 1; i < proj.length; i++) {
+      const t = Math.min(1, (now - pts[i].time) / windowMs);
+      const fade = Math.pow(1 - t, TRAIL_FADE_GAMMA);
+      const a = TRAIL_ALPHA_OLD + (TRAIL_ALPHA_FRESH - TRAIL_ALPHA_OLD) * fade;
+      insetCtx.strokeStyle = hexA(host.color, a);
+      insetCtx.lineWidth = INSET_TRAIL_WIDTH *
+        (TRAIL_TAPER_OLD + (1 - TRAIL_TAPER_OLD) * fade);
+      insetCtx.beginPath();
+      insetCtx.moveTo(proj[i-1].x, proj[i-1].y);
+      insetCtx.lineTo(proj[i].x, proj[i].y);
+      insetCtx.stroke();
+    }
+  });
+}
+
+const insetMarkerEls = {};
+function drawInsetAvatars() {
+  const shown = {};
+  insetRoster().forEach(host => {
+    let el = insetMarkerEls[host.call];
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'ins-marker';
+      el.style.setProperty('--hc', host.color);
+      el.innerHTML = `
+        <div class="center">
+          <div class="ins-face"><img class="pose" alt=""><span class="ini">${host.initials || ''}</span></div>
+          <div class="ins-tag">${host.call}</div>
+        </div>`;
+      insetAvatarLayer.appendChild(el);
+      insetMarkerEls[host.call] = el;
+    }
+    const d = deriveHost(host);
+    if (d.empty) return;
+    shown[host.call] = true;
+    el.style.display = '';
+    const pt = ll(d.latest, insetMap);
+    el.style.transform = `translate3d(${pt.x}px, ${pt.y}px, 0)`;
+    setPose(el.querySelector('.ins-face'), poseFor(host, d.state));
+    el.classList.toggle('dim', d.state === 'NOTHEARD');
+  });
+  for (const call in insetMarkerEls) {
+    if (!shown[call]) insetMarkerEls[call].style.display = 'none';
+  }
+}
+
+/* ============================================================
+   FRAMING
+   ============================================================ */
 function hostFitPoints(h) {
   if (!h.track || !h.track.length) return [];
   if (FIT_MODE === 'trails') return h.track.map(p => [p.lat, p.lng]);
   const last = h.track[h.track.length - 1];
   return [[last.lat, last.lng]];
+}
+
+// Widest gap between any two hosts right now, in miles. This is the number
+// the inset triggers on, because it is the one you can judge by eye when you
+// look up at the board and decide it has gone wrong.
+function spreadMi(list) {
+  let max = 0;
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const d = haversineKm(list[i].latest, list[j].latest) * KM_TO_MI;
+      if (d > max) max = d;
+    }
+  }
+  return max;
 }
 
 // Which host is the odd one out? Score each by the total distance to everyone
@@ -1224,44 +1411,50 @@ function frameBounds() {
     .map(h => ({ h, latest: h.track[h.track.length - 1] }));
 
   if (!live.length) {
+    setInset(null);
     map.setView([CLARKSTON.lat, CLARKSTON.lng], FIT_FALLBACK_ZOOM);
     return;
   }
 
-  // fitBounds applies FIT_PADDING_PX on each side, so the zoom probe has to
-  // charge double or it green-lights a fit that lands under the floor.
-  const pad = L.point(FIT_PADDING_PX * 2, FIT_PADDING_PX * 2);
-  const boundsOf = set => L.latLngBounds(
-    set.reduce((acc, e) => acc.concat(hostFitPoints(e.h)), []));
-
-  let b = boundsOf(live);
-  // Somebody two states away is a rare event, but it used to cost the whole
-  // board: fitting them dropped the zoom until the rest of us were a single
-  // pixel cluster. Peel the outlier off until what is left fits at a zoom you
-  // can actually read; drawAvatars puts the peeled hosts on the frame edge.
-  const floor = () => FIT_MIN_ZOOM +
-    (live.some(e => framedOut[e.h.call]) ? FIT_HYSTERESIS : 0);
-  while (live.length > 1 && map.getBoundsZoom(b, false, pad) < floor()) {
-    live.splice(mostOutlying(live), 1);
-    b = boundsOf(live);
+  // Everybody stays in the wide frame, always -- that long line out to
+  // wherever somebody drove is the point of the board. What the spread
+  // decides is whether the ones still together also need their own panel.
+  //
+  // Two separate questions. Whether to open at all is a plain distance with
+  // a hysteresis band, so the panel does not blink while somebody idles on
+  // the line. Who goes in it is a fraction of the current spread, so the
+  // grouping keeps working whether the board is showing two states or the
+  // whole country.
+  const spread = spreadMi(live);
+  const groupMi = spread * INSET_GROUP_FRACTION;
+  const core = live.slice();
+  while (core.length > 1 && spreadMi(core) > groupMi) {
+    core.splice(mostOutlying(core), 1);
   }
+  const limit = insetHosts.length ? INSET_CLEAR_MI : INSET_TRIGGER_MI;
+  setInset(INSET_ENABLE && spread > limit &&
+           core.length > 1 && core.length < live.length
+    ? core.map(e => e.h)
+    : null);
 
-  const kept = {};
-  live.forEach(e => { kept[e.h.call] = true; });
-  framedOut = {};
-  hosts.forEach(h => {
-    if (h.track && h.track.length && !kept[h.call]) framedOut[h.call] = true;
-  });
+  const b = L.latLngBounds(
+    live.reduce((acc, e) => acc.concat(hostFitPoints(e.h)), []));
 
   if (b.getNorthEast().equals(b.getSouthWest())) {
     map.setView(b.getCenter(), FIT_MAX_ZOOM, { animate: false });
-  } else {
-    map.fitBounds(b, {
-      padding: [FIT_PADDING_PX, FIT_PADDING_PX],
-      maxZoom: FIT_MAX_ZOOM,
-      animate: false
-    });
+    return;
   }
+  // Reserve the inset's corner in the fit rather than letting the panel land
+  // on top of a host. setInset has already laid the panel out, so its real
+  // height is measurable here.
+  const panel = document.getElementById('inset');
+  const reserve = insetHosts.length ? panel.offsetHeight + 24 : 0;
+  map.fitBounds(b, {
+    paddingTopLeft: [FIT_PADDING_PX, FIT_PADDING_PX],
+    paddingBottomRight: [FIT_PADDING_PX, FIT_PADDING_PX + reserve],
+    maxZoom: FIT_MAX_ZOOM,
+    animate: false
+  });
 }
 
 /* ============================================================
@@ -1279,10 +1472,7 @@ function buildCards() {
       <div class="avatar"><img class="pose" alt=""><span class="ini">${h.initials || ''}</span></div>
       <div class="who">
         <div class="call">${h.call}</div>
-        <div class="nameline">
-          <span class="name">${h.name}</span>
-          <span class="offmap" data-offmap hidden>Off map</span>
-        </div>
+        <div class="name">${h.name}</div>
         <div class="heard" data-heard>--</div>
       </div>
       <div class="metrics">
@@ -1382,7 +1572,7 @@ function ageText(min) {
 /* ============================================================
    RENDER LOOP  -  always-visible age-graded trails + traveling pulse
    ============================================================ */
-function ll(p) { return map.latLngToContainerPoint([p.lat, p.lng]); }
+function ll(p, m) { return (m || map).latLngToContainerPoint([p.lat, p.lng]); }
 
 /* ---------- host glyphs ----------
    One source of truth for the marker shapes: the canvas head/pulse markers
@@ -1490,6 +1680,7 @@ function renderLoop(nowMs) {
     lastDrawMs = nowMs;
     drawTrails();
     drawAvatars();
+    if (insetHosts.length) { drawInsetTrails(); drawInsetAvatars(); }
   }
   requestAnimationFrame(renderLoop);
 }
@@ -1616,9 +1807,6 @@ function drawTrails() {
 /* ---------- avatars (always at the latest position) ---------- */
 const markerEls = {};
 function drawAvatars() {
-  const w = avatarLayer.clientWidth, h = avatarLayer.clientHeight;
-  const strays = [];
-
   hosts.forEach(host => {
     let el = markerEls[host.call];
     if (!el) {
@@ -1637,18 +1825,9 @@ function drawAvatars() {
     }
     const d = deriveHost(host);
     if (d.empty) { el.style.display = 'none'; return; }
+    el.style.display = '';
 
     const pt = ll(d.latest);
-    // Off the frame, or close enough to the edge that the marker would be a
-    // half-clipped smear. Either way it belongs to the beacon rail, not here.
-    if (pt.x < OFFMAP_EDGE_PX || pt.y < OFFMAP_EDGE_PX ||
-        pt.x > w - OFFMAP_EDGE_PX || pt.y > h - OFFMAP_EDGE_PX) {
-      el.style.display = 'none';
-      strays.push({ host, d, pt });
-      return;
-    }
-
-    el.style.display = '';
     el.style.transform = `translate3d(${pt.x}px, ${pt.y}px, 0)`;
     el.querySelector('.host-beam').style.setProperty('--course', (d.latest.course||0) + 'deg');
 
@@ -1656,96 +1835,8 @@ function drawAvatars() {
 
     el.classList.toggle('rolling', d.state === 'ROLLING');
     el.classList.toggle('dim', d.state === 'NOTHEARD');
+    el.classList.toggle('grouped', insetHosts.indexOf(host.call) !== -1);
   });
-
-  drawBeacons(strays, w, h);
-}
-
-/* ---------- off-map edge beacons ----------
-   Distance and bearing are measured from the middle of what the board is
-   currently showing, so the chip reads as "this far past the edge, that way"
-   rather than as a second, unrelated home-distance number. */
-function drawBeacons(strays, w, h) {
-  const c = map.getCenter();
-  const from = { lat: c.lat, lng: c.lng };
-  const cx = w / 2, cy = h / 2;
-  const seen = {}, next = {};
-
-  // Seed the collision list with the fixed map furniture so a beacon nudged
-  // onto the right-hand edge does not land on the trail-age legend.
-  const wrapBox = offMapLayer.getBoundingClientRect();
-  const placed = ['.window-badge', '.age-legend'].map(sel => {
-    const n = document.querySelector(sel);
-    if (!n) return null;
-    const r = n.getBoundingClientRect();
-    return { x: r.x - wrapBox.x + r.width / 2, y: r.y - wrapBox.y + r.height / 2,
-             bw: r.width / 2, bh: r.height / 2 };
-  }).filter(Boolean);
-
-  strays.forEach(({ host, d, pt }) => {
-    let el = beaconEls[host.call];
-    if (!el) {
-      el = document.createElement('div');
-      el.className = 'edge-beacon';
-      el.style.setProperty('--hc', host.color);
-      el.innerHTML = `
-        <div class="eb-arrow"></div>
-        <div class="eb-face"><img class="pose" alt=""><span class="ini">${host.initials || ''}</span></div>
-        <div class="eb-txt">
-          <div class="eb-call">${host.call}</div>
-          <div class="eb-dist" data-dist>--</div>
-        </div>`;
-      offMapLayer.appendChild(el);
-      beaconEls[host.call] = el;
-    }
-    seen[host.call] = true;
-    el.style.display = '';
-
-    const txt = milesText(haversineKm(from, d.latest) * KM_TO_MI) + ' ' +
-                compass(bearingDeg(from, d.latest));
-    next[host.call] = { text: txt };
-
-    setPose(el.querySelector('.eb-face'), poseFor(host, d.state));
-    el.classList.toggle('dim', d.state === 'NOTHEARD');
-
-    const dx = pt.x - cx, dy = pt.y - cy;
-    el.classList.toggle('flip', dx > 0);
-    el.style.setProperty('--ang', (Math.atan2(dy, dx) * 180 / Math.PI).toFixed(1) + 'deg');
-
-    // Measuring the chip forces a layout, so only do it when the label or the
-    // flip side actually changed -- everything else here is transform-only.
-    if (el._txt !== txt) { el._txt = txt; el.querySelector('[data-dist]').textContent = txt; }
-    if (el._txt !== el._sized || !el._bw) {
-      el._sized = el._txt;
-      el._bw = el.offsetWidth / 2;
-      el._bh = el.offsetHeight / 2;
-    }
-    const bw = el._bw, bh = el._bh;
-
-    // Walk out along the bearing to where it crosses the frame, then pull the
-    // whole chip back inside so it never hangs off a rounded corner.
-    const sx = Math.abs(dx) > 0.001 ? (cx - OFFMAP_INSET_PX) / Math.abs(dx) : Infinity;
-    const sy = Math.abs(dy) > 0.001 ? (cy - OFFMAP_INSET_PX) / Math.abs(dy) : Infinity;
-    const k = Math.min(sx, sy);
-    let x = cx + dx * k, y = cy + dy * k;
-    x = Math.min(Math.max(x, bw + OFFMAP_INSET_PX), w - bw - OFFMAP_INSET_PX);
-    y = Math.min(Math.max(y, bh + OFFMAP_INSET_PX), h - bh - OFFMAP_INSET_PX);
-
-    // Two hosts off the same edge would otherwise stack on one another.
-    placed.forEach(q => {
-      if (Math.abs(q.x - x) < q.bw + bw && Math.abs(q.y - y) < q.bh + bh + 8) {
-        y = q.y + q.bh + bh + 8;
-      }
-    });
-    if (y > h - bh - OFFMAP_INSET_PX) y = h - bh - OFFMAP_INSET_PX;
-
-    placed.push({ x, y, bw, bh });
-    el.style.transform =
-      `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0) translate(-50%, -50%)`;
-  });
-
-  for (const call in beaconEls) if (!seen[call]) beaconEls[call].style.display = 'none';
-  offMapState = next;
 }
 
 /* ============================================================
@@ -1781,7 +1872,6 @@ function masterTick() {
       card.querySelector('[data-statetext]').textContent = 'No beacons';
       card.querySelector('[data-heard]').textContent =
         'Not heard in ' + TRAIL_HOURS + 'h';
-      card.querySelector('[data-offmap]').hidden = true;
       ['[data-miles]','[data-roll]','[data-top]','[data-beacons]']
         .forEach(sel => { card.querySelector(sel).textContent = '\u2014'; });
       return;
@@ -1796,11 +1886,6 @@ function masterTick() {
       d.state === 'ROLLING' ? 'Rolling \u00b7 ' + city : city;
     card.querySelector('[data-heard]').textContent = ageText(d.ageMin);
     setPose(card.querySelector('.avatar'), poseFor(host, d.state));
-
-    // The map above only frames the group; say plainly that this host is not
-    // on it, so a missing dot never reads as a dead feed. The state pill next
-    // to this already carries how far and which way.
-    card.querySelector('[data-offmap]').hidden = !offMapState[host.call];
 
     card.querySelector('[data-miles]').innerHTML = d.miles.toFixed(1) + '<small>mi</small>';
     card.querySelector('[data-roll]').innerHTML = d.rollH >= 1
