@@ -206,7 +206,11 @@
     font-family: 'Oswald', sans-serif;
     font-weight: 600;
     font-size: 20px;
-    color: var(--navy-dark);
+    /* Cream, not navy: the trail palette is deliberately dark, and navy
+       initials on it measure 2.6-3.5:1 where cream measures 5.0-6.6:1.
+       Only visible when a portrait fails to load, but that is exactly when
+       the board should still be readable. */
+    color: var(--cream);
     letter-spacing: 0.5px;
     position: relative;
     overflow: hidden;
@@ -235,6 +239,11 @@
     white-space: nowrap;
   }
 
+  /* Hosts the inset has taken over. On the wide map they are stacked on top
+     of each other, so their tags collide into a smear; the panel below names
+     them properly a few inches away, and the avatar colours still say who. */
+  .host-marker.grouped .host-tag { display: none; }
+
   /* Glyph badge on the callsign tag, tying a marker to its trail. The roster
      cards do without one: down there the host colour already says who. */
   .glyph { vertical-align: -1px; margin-right: 6px; }
@@ -258,10 +267,12 @@
   }
   .window-badge b { color: var(--orange); font-weight: 600; }
 
-  /* Age scale: fresh (green) -> 3 days (red) */
+  /* Age scale: fresh (green) -> 3 days (red). Sits top-left, bracketing the
+     window badge opposite it; the bottom-left corner it used to occupy now
+     belongs to the detail inset. */
   .age-legend {
     position: absolute;
-    left: 16px; bottom: 14px;
+    left: 16px; top: 16px;
     z-index: 402;
     background: rgba(13,22,32,0.9);
     border: 1px solid rgba(255,255,255,0.12);
@@ -282,7 +293,7 @@
     border-radius: 4px;
     /* End stop tracks TRAIL_ALPHA_OLD / TRAIL_ALPHA_FRESH, so the legend
        shows the fade the trails actually use. */
-    background: linear-gradient(90deg, rgba(253,248,229,0.95) 0%, rgba(253,248,229,0.42) 100%);
+    background: linear-gradient(90deg, rgba(253,248,229,0.95) 0%, rgba(253,248,229,0.60) 100%);
   }
   .age-ends {
     display: flex;
@@ -293,6 +304,85 @@
     text-transform: uppercase;
     color: var(--cream-50);
   }
+
+  /* ---------- Detail inset ----------
+     The wide map keeps the road-trip story -- the long line from home down to
+     wherever somebody drove. This keeps the people who stayed put legible
+     while it does. Only mounted once the group actually spreads, and the wide
+     fit reserves this corner so it never parks a host underneath the panel. */
+  #inset {
+    position: absolute;
+    left: 16px; bottom: 14px;
+    z-index: 403;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(13,22,32,0.94);
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.60);
+  }
+  #inset[hidden] { display: none; }
+  .inset-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px;
+    padding: 8px 13px 7px;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+  }
+  .inset-head .ih-tag {
+    flex: 0 0 auto;
+    font-size: 12px; font-weight: 500; letter-spacing: 2px;
+    color: var(--orange);
+  }
+  .inset-head .ih-place {
+    min-width: 0;
+    font-size: 15px; font-weight: 500; letter-spacing: 1.2px;
+    color: var(--cream);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .inset-body { position: relative; }
+  #insetmap { position: absolute; inset: 0; background: #e9eef2; }
+  #insettrails, #insetavatars {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  #insettrails { z-index: 400; }
+  #insetavatars { z-index: 401; }
+
+  .ins-marker { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+  .ins-marker .center {
+    position: absolute;
+    left: 0; top: 0;
+    transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .ins-face {
+    position: relative;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--hc);
+    border: 2px solid var(--cream);
+    box-shadow: 0 0 9px rgba(0,0,0,0.5), 0 0 12px var(--hc);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 12px;
+    color: var(--cream);
+  }
+  .ins-face img.pose { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .ins-face:not(.imgloaded) img.pose { display: none; }
+  .ins-face.imgloaded .ini { display: none; }
+  .ins-tag {
+    margin-top: 3px;
+    font-family: 'Oswald', sans-serif; font-weight: 500;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--cream);
+    background: rgba(13,22,32,0.80);
+    border: 1px solid var(--hc);
+    padding: 0 6px 1px;
+    border-radius: 5px;
+    white-space: nowrap;
+  }
+  .ins-marker.dim { opacity: 0.72; }
 
   /* ---------- Bottom status cards ---------- */
   #cards {
@@ -321,7 +411,7 @@
     border: 3px solid var(--cream);
     display: flex; align-items: center; justify-content: center;
     font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 21px;
-    color: var(--navy-dark);
+    color: var(--cream);
     box-shadow: 0 0 14px var(--hc);
     position: relative;
     overflow: hidden;
@@ -452,6 +542,18 @@
       <div class="age-bar"></div>
       <div class="age-ends"><span>Now</span><span>3 days</span></div>
     </div>
+
+    <div id="inset" hidden>
+      <div class="inset-head">
+        <span class="ih-tag">Detail</span>
+        <span class="ih-place" data-inset-place>--</span>
+      </div>
+      <div class="inset-body">
+        <div id="insetmap"></div>
+        <canvas id="insettrails"></canvas>
+        <div id="insetavatars"></div>
+      </div>
+    </div>
   </div>
 
   <div id="cards"></div>
@@ -480,15 +582,15 @@ const CLARKSTON = { lat: 42.7356, lng: -83.4183 };
 
 // Roster. `call` must match the poller output keys (base callsigns).
 const HOSTS = [
-  { call: 'K8JKU', name: 'James', color: '#4a90e2', initials: 'JA', shape: 'circle',
+  { call: 'K8JKU', name: 'James', color: '#0B6BCB', initials: 'JA', shape: 'circle',
     home: { lat: 42.7356, lng: -83.4183 },                          // Clarkston
     poses: { home: 'icons/james-home.png', portable: 'icons/james-portable.png', mobile: 'icons/james-mobile.png' } },
 
-  { call: 'N8JRD', name: 'Jim', color: '#ff7030', initials: 'JI', shape: 'triangle',
+  { call: 'N8JRD', name: 'Jim', color: '#C1121F', initials: 'JI', shape: 'triangle',
     home: { lat: 42.4606, lng: -83.6516 },                          // South Lyon
     poses: { home: 'icons/jim-home.png', portable: 'icons/jim-portable.png', mobile: 'icons/jim-mobile.png' } },
 
-  { call: 'W8KNX', name: 'Rory', color: '#9b59b6', initials: 'RO', shape: 'square',
+  { call: 'W8KNX', name: 'Rory', color: '#8E24AA', initials: 'RO', shape: 'square',
     home: { lat: 42.4606, lng: -83.6516 },                          // South Lyon
     poses: { home: 'icons/rory-home.png', portable: 'icons/rory-portable.png', mobile: 'icons/rory-mobile.png' } },
 ];
@@ -514,16 +616,32 @@ const KM_TO_MI = 0.621371;
 
 // Rendering (Pi 5 has headroom; drop RENDER_FPS to 15-20 on weak hardware)
 const RENDER_FPS   = 30;
-const TRAIL_WIDTH  = 4;        // age-colored core line
-const CASING_WIDTH = 9;        // host-color identity casing under the core
-const CASING_ALPHA = 0.30;
+// Core to casing ratio matters as much as the widths: at 4/9 the dark edge
+// swallowed the host colour and every trail read as "a dark line". 5.5 inside
+// 8.5 leaves 1.5px of casing a side, which is still a hard edge against the
+// map while letting the colour carry.
+const TRAIL_WIDTH  = 5.5;      // age-colored core line
+const CASING_WIDTH = 8.5;      // dark casing under the core
+// The casing is what actually touches the basemap, so it is what has to
+// separate from it -- and a neutral dark does that on any style, where a
+// host-coloured one only worked when the host colour happened to miss the
+// map's palette. Measured worst case against any feature on any of the styles
+// in BASEMAPS: this casing scores 21.9, the old host-coloured 30% one scored
+// 7.0. It is the single biggest reason a trail reads over a highway.
+const CASING_COLOR     = '#0d1620';
+const CASING_ALPHA     = 0.62;  // at the head
+const CASING_ALPHA_OLD = 0.45;  // at the tail -- still a real outline
 
 // Trail age is read as opacity. The tail is deliberately dimmer than the head,
 // but it still has to be legible from across the room, so it fades to a floor
 // rather than to nothing. Raise TRAIL_ALPHA_OLD if three days back is still
 // too faint; lower it if the old track competes with today's.
 const TRAIL_ALPHA_FRESH = 0.95;  // opacity at the head (now)
-const TRAIL_ALPHA_OLD   = 0.42;  // opacity at the tail (72h back)
+// Was 0.42, which let the old end of a trail composite most of the way back
+// to the basemap: every colour measured under 8 against Esri's features down
+// there, no matter what hue it was. The age gradient is a bit shallower now
+// and the tail survives.
+const TRAIL_ALPHA_OLD   = 0.60;  // opacity at the tail (72h back)
 const TRAIL_FADE_GAMMA  = 1.15;  // >1 holds the bright end longer
 const TRAIL_TAPER_OLD   = 0.72;  // width multiplier at the tail
 
@@ -543,7 +661,30 @@ const TRAIL_OFFSET_PX = 7;     // sideways separation between hosts' trails so
                                // shared roads render as parallel ribbons
                                // (transit-map style). 0 disables.
 
-const MODE_PALETTE = ['#ff7030', '#4a90e2', '#9b59b6', '#2ecc71'];
+// Trail colours, chosen against what street basemaps put underneath them.
+// Every one of these styles spends its palette on the same things: orange and
+// yellow for highways, pale blue for water, pale green for parks, cream for
+// minor roads and land. So the trails stay out of that range and sit darker
+// and more saturated than any of it -- basemap features are pale by design,
+// which is a gap worth using.
+//
+// Measured worst-case CIEDE2000 against Esri World Street Map's feature
+// colours, at both trail opacities, over every tone a trail can cross:
+//
+//                        vs the map    vs each other
+//   this palette             14.0          29.8
+//   the old one               7.4          30.0
+//
+// Jim was on the show's orange (#ff7030), which is very nearly Esri's
+// motorway fill -- 7.2 at the faded end of a trail, which is why his line
+// disappeared over a highway. James was quietly worse: #4a90e2 came out at
+// 1.6 against pale water. Both are fixed here, and each host keeps his hue
+// family, so nobody has to relearn who is who.
+//
+// A stronger set exists -- #3B3FBF / #C1121F / #00796B scores 19.1 and 39.5 --
+// but it turns Rory teal. Try it in basemap-preview.html if you want it.
+// The brand orange is untouched: it is still the UI accent, just not a trail.
+const MODE_PALETTE = ['#C1121F', '#0B6BCB', '#8E24AA', '#00796B'];
 
 // Basemap.
 // CARTO's raster basemaps are no longer anonymous: unkeyed tiles come back
@@ -611,6 +752,23 @@ const BASEMAPS = {
   'versatiles':     { type: 'vector', style: 'https://tiles.versatiles.org/assets/styles/colorful/style.json',
                       attrib: '&copy; VersaTiles &copy; OpenStreetMap contributors' }
 };
+// Which of these actually draws depends on where the page is served from.
+// CARTO_API_KEY is empty in the repo, so opening this file directly falls
+// through to BASEMAP_NO_KEY (Esri World Street Map). The Pages deploy is
+// different: .github/workflows/pages.yml substitutes the CARTO_API_KEY secret
+// into this constant on the way out, so the published board draws Voyager
+// whenever that secret is set.
+//
+// The trail palette was measured against both, since either can be what is on
+// the wall. Worst-case CIEDE2000 for the weakest host colour against the
+// style's own feature colours:
+//
+//                     Esri street   Voyager
+//   this palette          14.0        13.2
+//   the old one            7.4         7.8
+//
+// basemap-preview.html draws sample trails over every candidate here, so the
+// pairing can be checked on the board before switching styles.
 const BASEMAP        = 'carto-voyager'; // the style the board draws
 const BASEMAP_NO_KEY = 'esri-street'; // used if BASEMAP needs a key we lack,
                                       // or if a vector style cannot load
@@ -623,6 +781,50 @@ const FIT_PADDING_PX    = 80;
 const FIT_FALLBACK_ZOOM = 11;
 const AUTO_REFIT        = true;
 
+// Detail inset. The main map always frames everybody -- a host on a road trip
+// two states away is half the fun of the board, and cropping them out loses
+// the long line that says so. The cost is that whoever stayed home collapses
+// into one blob at that zoom, so once the group spreads past
+// INSET_TRIGGER_MI a second little map opens in the corner, framed on
+// whoever is still together, and the wide view keeps the story.
+//
+// The trigger is a plain distance -- the greatest gap between any two hosts
+// right now -- because that is the thing you can judge by eye when you decide
+// the board looks wrong. For scale, from Clarkston:
+//
+//    Novi            30 mi        Chicago          240 mi
+//    Columbus OH    180 mi        Houghton (UP)    400 mi
+//    Traverse City  180 mi        Nashville        470 mi
+//    Dayton OH      210 mi        Miami          1,170 mi
+//
+// At the default 250 the inset stays shut for a Hamvention run or a weekend
+// up in Traverse City -- the locals are still 97-128px apart up there, which
+// reads fine -- and opens for the UP and anything further. Drop it to ~150 to
+// have it open on shorter trips, raise it to keep the board plain. Set
+// INSET_ENABLE = false to turn it off entirely.
+const INSET_ENABLE      = true;
+const INSET_TRIGGER_MI  = 250;
+// Closes again a bit tighter than it opens, so a host parked near the line
+// does not pop the panel in and out every time a beacon lands.
+const INSET_CLEAR_MI    = 200;
+// Once it is open, who goes in it: the hosts whose own span is inside this
+// fraction of the board's full spread. Deliberately a ratio and not a second
+// distance, because being crushed is relative -- two hosts 200 miles apart
+// are one blob on a view of the whole country and perfectly separate on a
+// view of two states. Leave it alone; INSET_TRIGGER_MI is the knob.
+const INSET_GROUP_FRACTION = 0.25;
+const INSET_W           = 384; // panel size inside the map frame
+const INSET_H           = 300;
+const INSET_PADDING_PX  = 30;  // breathing room around the group inside it
+const INSET_MAX_ZOOM    = 13;
+const INSET_TRAIL_WIDTH = 3;     // same core:casing ratio as the big map
+const INSET_CASING_WIDTH = 4.8;
+const INSET_TRAIL_OFFSET_PX = 4;
+
+const TRAIL_CULL_PX     = 240; // skip drawing trails this far off canvas
+const CITY_MAX_KM       = 120; // past this the CITIES list is guessing, so
+                               // the pill switches to a grid square
+
 /* ============================================================
    STATE
    ============================================================ */
@@ -632,6 +834,13 @@ let dataGeneratedMs = 0;
 let sourceLabel = 'Simulated data';
 let lastSignature = '';
 let lastFitSig = '';
+let insetMap, insetCanvas, insetCtx, insetAvatarLayer;
+// Callsigns, not host objects: applyData rebuilds the whole hosts array on
+// every poll, and frameBounds only re-runs when the fit signature moves, so
+// anything holding an object reference here would quietly go stale and the
+// inset would freeze on an old track. Empty means the panel is shut, which is
+// also what tells frameBounds which side of the hysteresis it is on.
+let insetHosts = [];
 let tickCount = 0;
 let lastDrawMs = 0;
 const FRAME_MIN_MS = 1000 / RENDER_FPS;
@@ -646,6 +855,25 @@ function haversineKm(a, b) {
   const la1 = a.lat * Math.PI / 180, la2 = b.lat * Math.PI / 180;
   const h = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+// Maidenhead locator. Out past the CITIES list a grid square is the honest
+// answer to "where is he", it is what a ham would say on the air anyway, and
+// unlike a spelled-out distance it stays short enough not to blow the card's
+// state pill out and squeeze the column beside it.
+function gridSquare(p) {
+  const lon = p.lng + 180, lat = p.lat + 90;
+  const FIELD = 'ABCDEFGHIJKLMNOPQR', SUB = 'abcdefghijklmnopqrstuvwx';
+  return FIELD[Math.floor(lon / 20)] + FIELD[Math.floor(lat / 10)] +
+         Math.floor((lon % 20) / 2) + Math.floor(lat % 10) +
+         SUB[Math.floor((lon % 2) * 12)] + SUB[Math.floor((lat % 1) * 24)];
+}
+
+function bearingDeg(a, b) {
+  const la1 = a.lat * Math.PI / 180, la2 = b.lat * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const y = Math.sin(dLng) * Math.cos(la2);
+  const x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 function compass(deg) {
   const dirs = ['N','NE','E','SE','S','SW','W','NW'];
@@ -706,7 +934,12 @@ function nearestCity(p) {
     const km = haversineKm(p, { lat, lng });
     if (km < bestKm) { bestKm = km; best = name; }
   }
-  return best || '--';
+  if (!best) return '--';
+  // The list is Michigan-centric on purpose. A host in Florida would otherwise
+  // be labelled with whichever Michigan town happened to be least far away,
+  // which reads as a bug. Past CITY_MAX_KM, fall back to the grid square.
+  if (bestKm > CITY_MAX_KM) return 'Grid ' + gridSquare(p).slice(0, 4);
+  return best;
 }
 
 /* ============================================================
@@ -765,13 +998,6 @@ function sampleSchedule(sched, minute) {
     }
   }
   return { lat: last[1], lng: last[2] };
-}
-
-function bearingDeg(a, b) {
-  const y = Math.sin((b.lng-a.lng)*Math.PI/180) * Math.cos(b.lat*Math.PI/180);
-  const x = Math.cos(a.lat*Math.PI/180)*Math.sin(b.lat*Math.PI/180) -
-            Math.sin(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.cos((b.lng-a.lng)*Math.PI/180);
-  return (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
 }
 
 function buildSimulated() {
@@ -1034,7 +1260,11 @@ function initMap() {
   avatarLayer = document.getElementById('avatars');
 
   sizeCanvas();
-  window.addEventListener('resize', () => { sizeCanvas(); frameBounds(); });
+  window.addEventListener('resize', () => {
+    sizeCanvas();
+    if (insetMap) { insetMap.invalidateSize(); sizeInsetCanvas(); }
+    frameBounds();
+  });
 }
 
 function sizeCanvas() {
@@ -1048,17 +1278,198 @@ function sizeCanvas() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-function getFitPoints() {
-  const pts = [];
-  hosts.forEach(h => {
-    if (!h.track || !h.track.length) return;
-    if (FIT_MODE === 'trails') h.track.forEach(p => pts.push([p.lat, p.lng]));
-    else {
-      const last = h.track[h.track.length - 1];
-      pts.push([last.lat, last.lng]);
+/* ============================================================
+   DETAIL INSET
+   A second little map, framed on whoever is still together, so the wide view
+   can keep somebody's road trip on screen without the rest of us collapsing
+   into one dot. Mounted lazily -- a board where nobody ever leaves the county
+   never pays for a second basemap.
+   ============================================================ */
+function initInsetMap() {
+  const panel = document.getElementById('inset');
+  panel.style.width = INSET_W + 'px';
+  panel.querySelector('.inset-body').style.height = INSET_H + 'px';
+
+  insetMap = L.map('insetmap', {
+    zoomControl: false, attributionControl: false,  // the big map carries it
+    dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+    boxZoom: false, keyboard: false, touchZoom: false, tap: false,
+    inertia: false, zoomSnap: 0.1
+  });
+  addBaseLayer(insetMap);
+
+  insetCanvas = document.getElementById('insettrails');
+  insetCtx = insetCanvas.getContext('2d');
+  insetAvatarLayer = document.getElementById('insetavatars');
+  sizeInsetCanvas();
+}
+
+function sizeInsetCanvas() {
+  const body = insetCanvas.parentElement;
+  const w = body.clientWidth, h = body.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  insetCanvas.width = w * dpr;
+  insetCanvas.height = h * dpr;
+  insetCanvas.style.width = w + 'px';
+  insetCanvas.style.height = h + 'px';
+  insetCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// The live host objects the inset is framed on, resolved fresh from whatever
+// applyData last built.
+function insetRoster() {
+  return insetHosts
+    .map(call => hosts.find(h => h.call === call))
+    .filter(Boolean);
+}
+
+// Pass the hosts to frame, or null to shut the panel. Fewer than two is the
+// same as null: a lone host is a lone dot, and a dot is legible anywhere on
+// the wide map without help.
+function setInset(list) {
+  const panel = document.getElementById('inset');
+  if (!list || list.length < 2) {
+    insetHosts = [];
+    panel.hidden = true;
+    return;
+  }
+  const opening = panel.hidden;
+  panel.hidden = false;                      // Leaflet needs a laid-out box
+  if (!insetMap) initInsetMap();
+  else if (opening) { insetMap.invalidateSize(); sizeInsetCanvas(); }
+  insetHosts = list.map(h => h.call);
+
+  const b = L.latLngBounds(list.reduce((acc, h) => acc.concat(hostFitPoints(h)), []));
+  if (b.getNorthEast().equals(b.getSouthWest())) {
+    insetMap.setView(b.getCenter(), INSET_MAX_ZOOM, { animate: false });
+  } else {
+    insetMap.fitBounds(b, {
+      padding: [INSET_PADDING_PX, INSET_PADDING_PX],
+      maxZoom: INSET_MAX_ZOOM,
+      animate: false
+    });
+  }
+  const c = b.getCenter();
+  document.querySelector('[data-inset-place]').textContent =
+    nearestCity({ lat: c.lat, lng: c.lng });
+
+  // Draw now rather than waiting for the next animation frame. The panel is
+  // already on screen at this point, and when it reopens on a different pair
+  // than last time the leftover markers would show for a frame at positions
+  // belonging to the old view.
+  drawInsetTrails();
+  drawInsetAvatars();
+}
+
+function drawInsetTrails() {
+  const w = insetCanvas.clientWidth, h = insetCanvas.clientHeight;
+  insetCtx.clearRect(0, 0, w, h);
+  const now = Date.now();
+  const windowMs = TRAIL_HOURS * 3600 * 1000;
+  const roster = insetRoster();
+
+  roster.forEach((host, hi) => {
+    const pts = host.track;
+    if (!pts || pts.length < 2) return;
+    const off = (hi - (roster.length - 1) / 2) * INSET_TRAIL_OFFSET_PX;
+    const proj = offsetPolyline(pts.map(p => ll(p, insetMap)), off);
+
+    insetCtx.lineCap = 'round';
+    insetCtx.lineJoin = 'round';
+    // Casing plus core, same as the big map -- the panel sits over the same
+    // basemap and needs the same separation from it. What it drops is the
+    // decoration: no glyph stamps, no travelling pulse, which at panel size
+    // turn into noise. Age still fades and tapers, so the inset speaks the
+    // same language as the map above it.
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 1; i < proj.length; i++) {
+        const t = Math.min(1, (now - pts[i].time) / windowMs);
+        const fade = Math.pow(1 - t, TRAIL_FADE_GAMMA);
+        const alpha = pass === 0
+          ? CASING_ALPHA_OLD + (CASING_ALPHA - CASING_ALPHA_OLD) * fade
+          : TRAIL_ALPHA_OLD + (TRAIL_ALPHA_FRESH - TRAIL_ALPHA_OLD) * fade;
+        insetCtx.strokeStyle = hexA(pass === 0 ? CASING_COLOR : host.color, alpha);
+        insetCtx.lineWidth = (pass === 0 ? INSET_CASING_WIDTH : INSET_TRAIL_WIDTH) *
+          (TRAIL_TAPER_OLD + (1 - TRAIL_TAPER_OLD) * fade);
+        insetCtx.beginPath();
+        insetCtx.moveTo(proj[i-1].x, proj[i-1].y);
+        insetCtx.lineTo(proj[i].x, proj[i].y);
+        insetCtx.stroke();
+      }
     }
   });
-  return pts;
+}
+
+const insetMarkerEls = {};
+function drawInsetAvatars() {
+  const shown = {};
+  insetRoster().forEach(host => {
+    let el = insetMarkerEls[host.call];
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'ins-marker';
+      el.style.setProperty('--hc', host.color);
+      el.innerHTML = `
+        <div class="center">
+          <div class="ins-face"><img class="pose" alt=""><span class="ini">${host.initials || ''}</span></div>
+          <div class="ins-tag">${host.call}</div>
+        </div>`;
+      insetAvatarLayer.appendChild(el);
+      insetMarkerEls[host.call] = el;
+    }
+    const d = deriveHost(host);
+    if (d.empty) return;
+    shown[host.call] = true;
+    el.style.display = '';
+    const pt = ll(d.latest, insetMap);
+    el.style.transform = `translate3d(${pt.x}px, ${pt.y}px, 0)`;
+    setPose(el.querySelector('.ins-face'), poseFor(host, d.state));
+    el.classList.toggle('dim', d.state === 'NOTHEARD');
+  });
+  for (const call in insetMarkerEls) {
+    if (!shown[call]) insetMarkerEls[call].style.display = 'none';
+  }
+}
+
+/* ============================================================
+   FRAMING
+   ============================================================ */
+function hostFitPoints(h) {
+  if (!h.track || !h.track.length) return [];
+  if (FIT_MODE === 'trails') return h.track.map(p => [p.lat, p.lng]);
+  const last = h.track[h.track.length - 1];
+  return [[last.lat, last.lng]];
+}
+
+// Widest gap between any two hosts right now, in miles. This is the number
+// the inset triggers on, because it is the one you can judge by eye when you
+// look up at the board and decide it has gone wrong.
+function spreadMi(list) {
+  let max = 0;
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const d = haversineKm(list[i].latest, list[j].latest) * KM_TO_MI;
+      if (d > max) max = d;
+    }
+  }
+  return max;
+}
+
+// Which host is the odd one out? Score each by the total distance to everyone
+// else: two hosts in Oakland County both score low, the one in Florida scores
+// huge. Ties (a two-host board, where both sums are identical) go to whoever
+// is further from home, so the board stays anchored where the show lives.
+function mostOutlying(list) {
+  const sums = list.map(a => list.reduce((t, b) => t + haversineKm(a.latest, b.latest), 0));
+  let worst = 0;
+  for (let i = 1; i < list.length; i++) {
+    const d = sums[i] - sums[worst];
+    if (d > 1) worst = i;
+    else if (Math.abs(d) <= 1 &&
+             haversineKm(list[i].latest, CLARKSTON) >
+             haversineKm(list[worst].latest, CLARKSTON)) worst = i;
+  }
+  return worst;
 }
 
 function fitSignature() {
@@ -1069,21 +1480,55 @@ function fitSignature() {
 }
 
 function frameBounds() {
-  const pts = getFitPoints();
-  if (!pts.length) {
+  const live = hosts
+    .filter(h => h.track && h.track.length)
+    .map(h => ({ h, latest: h.track[h.track.length - 1] }));
+
+  if (!live.length) {
+    setInset(null);
     map.setView([CLARKSTON.lat, CLARKSTON.lng], FIT_FALLBACK_ZOOM);
     return;
   }
-  const b = L.latLngBounds(pts);
+
+  // Everybody stays in the wide frame, always -- that long line out to
+  // wherever somebody drove is the point of the board. What the spread
+  // decides is whether the ones still together also need their own panel.
+  //
+  // Two separate questions. Whether to open at all is a plain distance with
+  // a hysteresis band, so the panel does not blink while somebody idles on
+  // the line. Who goes in it is a fraction of the current spread, so the
+  // grouping keeps working whether the board is showing two states or the
+  // whole country.
+  const spread = spreadMi(live);
+  const groupMi = spread * INSET_GROUP_FRACTION;
+  const core = live.slice();
+  while (core.length > 1 && spreadMi(core) > groupMi) {
+    core.splice(mostOutlying(core), 1);
+  }
+  const limit = insetHosts.length ? INSET_CLEAR_MI : INSET_TRIGGER_MI;
+  setInset(INSET_ENABLE && spread > limit &&
+           core.length > 1 && core.length < live.length
+    ? core.map(e => e.h)
+    : null);
+
+  const b = L.latLngBounds(
+    live.reduce((acc, e) => acc.concat(hostFitPoints(e.h)), []));
+
   if (b.getNorthEast().equals(b.getSouthWest())) {
     map.setView(b.getCenter(), FIT_MAX_ZOOM, { animate: false });
-  } else {
-    map.fitBounds(b, {
-      padding: [FIT_PADDING_PX, FIT_PADDING_PX],
-      maxZoom: FIT_MAX_ZOOM,
-      animate: false
-    });
+    return;
   }
+  // Reserve the inset's corner in the fit rather than letting the panel land
+  // on top of a host. setInset has already laid the panel out, so its real
+  // height is measurable here.
+  const panel = document.getElementById('inset');
+  const reserve = insetHosts.length ? panel.offsetHeight + 24 : 0;
+  map.fitBounds(b, {
+    paddingTopLeft: [FIT_PADDING_PX, FIT_PADDING_PX],
+    paddingBottomRight: [FIT_PADDING_PX, FIT_PADDING_PX + reserve],
+    maxZoom: FIT_MAX_ZOOM,
+    animate: false
+  });
 }
 
 /* ============================================================
@@ -1201,7 +1646,7 @@ function ageText(min) {
 /* ============================================================
    RENDER LOOP  -  always-visible age-graded trails + traveling pulse
    ============================================================ */
-function ll(p) { return map.latLngToContainerPoint([p.lat, p.lng]); }
+function ll(p, m) { return (m || map).latLngToContainerPoint([p.lat, p.lng]); }
 
 /* ---------- host glyphs ----------
    One source of truth for the marker shapes: the canvas head/pulse markers
@@ -1309,6 +1754,7 @@ function renderLoop(nowMs) {
     lastDrawMs = nowMs;
     drawTrails();
     drawAvatars();
+    if (insetHosts.length) { drawInsetTrails(); drawInsetAvatars(); }
   }
   requestAnimationFrame(renderLoop);
 }
@@ -1328,6 +1774,20 @@ function drawTrails() {
     const off = (hi - (hosts.length - 1) / 2) * TRAIL_OFFSET_PX;
     const proj = offsetPolyline(pts.map(p => ll(p)), off);
 
+    // A host framed out of the view projects hundreds of thousands of pixels
+    // off canvas. None of it can land on the board, so skip the whole host
+    // rather than stroking a few hundred invisible segments every frame --
+    // this thing runs 24/7 on a stick PC. The edge beacon carries them.
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let i = 0; i < proj.length; i++) {
+      if (proj[i].x < minX) minX = proj[i].x;
+      if (proj[i].x > maxX) maxX = proj[i].x;
+      if (proj[i].y < minY) minY = proj[i].y;
+      if (proj[i].y > maxY) maxY = proj[i].y;
+    }
+    if (maxX < -TRAIL_CULL_PX || minX > w + TRAIL_CULL_PX ||
+        maxY < -TRAIL_CULL_PX || minY > h + TRAIL_CULL_PX) return;
+
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
@@ -1341,10 +1801,10 @@ function drawTrails() {
         const fade = Math.pow(1 - t, TRAIL_FADE_GAMMA);         // 1 fresh -> 0 old
         const core = TRAIL_ALPHA_OLD + (TRAIL_ALPHA_FRESH - TRAIL_ALPHA_OLD) * fade;
         const alpha = pass === 0
-          ? CASING_ALPHA * (core / TRAIL_ALPHA_FRESH)
+          ? CASING_ALPHA_OLD + (CASING_ALPHA - CASING_ALPHA_OLD) * fade
           : core;
         if (alpha < 0.02) continue;
-        ctx.strokeStyle = hexA(host.color, alpha);
+        ctx.strokeStyle = hexA(pass === 0 ? CASING_COLOR : host.color, alpha);
         ctx.lineWidth = pass === 0
           ? CASING_WIDTH
           : (TRAIL_WIDTH * (TRAIL_TAPER_OLD + (1 - TRAIL_TAPER_OLD) * fade));
@@ -1449,6 +1909,7 @@ function drawAvatars() {
 
     el.classList.toggle('rolling', d.state === 'ROLLING');
     el.classList.toggle('dim', d.state === 'NOTHEARD');
+    el.classList.toggle('grouped', insetHosts.indexOf(host.call) !== -1);
   });
 }
 
