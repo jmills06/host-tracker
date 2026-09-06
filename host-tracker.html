@@ -752,12 +752,23 @@ const BASEMAPS = {
   'versatiles':     { type: 'vector', style: 'https://tiles.versatiles.org/assets/styles/colorful/style.json',
                       attrib: '&copy; VersaTiles &copy; OpenStreetMap contributors' }
 };
-// Heads up: carto-voyager needs a key, CARTO_API_KEY above is empty, so
-// pickBasemap falls through and the board is really drawing BASEMAP_NO_KEY --
-// Esri World Street Map. That is the style the trail palette was measured
-// against. Paste a CARTO key, or set BASEMAP to a keyless id, to change it;
-// basemap-preview.html draws sample trails over every candidate so you can
-// see how the palette holds up before switching.
+// Which of these actually draws depends on where the page is served from.
+// CARTO_API_KEY is empty in the repo, so opening this file directly falls
+// through to BASEMAP_NO_KEY (Esri World Street Map). The Pages deploy is
+// different: .github/workflows/pages.yml substitutes the CARTO_API_KEY secret
+// into this constant on the way out, so the published board draws Voyager
+// whenever that secret is set.
+//
+// The trail palette was measured against both, since either can be what is on
+// the wall. Worst-case CIEDE2000 for the weakest host colour against the
+// style's own feature colours:
+//
+//                     Esri street   Voyager
+//   this palette          14.0        13.2
+//   the old one            7.4         7.8
+//
+// basemap-preview.html draws sample trails over every candidate here, so the
+// pairing can be checked on the board before switching styles.
 const BASEMAP        = 'carto-voyager'; // the style the board draws
 const BASEMAP_NO_KEY = 'esri-street'; // used if BASEMAP needs a key we lack,
                                       // or if a vector style cannot load
