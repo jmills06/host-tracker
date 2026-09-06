@@ -334,6 +334,14 @@
     font-size: 12px; font-weight: 500; letter-spacing: 2px;
     color: var(--orange);
   }
+  /* Only shown while the panel is cycling. Without it the view changing on its
+     own reads as a glitch rather than as a rotation. */
+  .inset-head .ih-count {
+    flex: 0 0 auto;
+    font-size: 12px; font-weight: 500; letter-spacing: 1px;
+    color: var(--cream-50);
+  }
+  .inset-head .ih-count[hidden] { display: none; }
   .inset-head .ih-place {
     min-width: 0;
     font-size: 15px; font-weight: 500; letter-spacing: 1.2px;
@@ -395,9 +403,15 @@
   .card {
     position: relative;
     display: grid;
-    grid-template-columns: 62px 1fr auto;
+    /* Fixed who column, metrics take the rest. The state pill is the one piece
+       of this card whose width is not ours to choose -- it holds a place name,
+       and "Sault Ste. Marie ON" used to take the whole row hostage: the who
+       track collapsed to 54px, the heard line folded into three, and the card
+       grew from 110px to 144. Pinning the column also lines the three cards up
+       with each other, which sizing to content never did. */
+    grid-template-columns: 62px 160px minmax(0, 1fr);
     align-items: center;
-    gap: 18px;
+    gap: 14px;
     background: rgba(255,255,255,0.05);
     border: 1px solid rgba(255,255,255,0.10);
     border-left: 6px solid var(--hc);
@@ -446,9 +460,19 @@
 
   .card .metrics {
     display: flex;
-    gap: 22px;
+    gap: 12px;
     align-items: center;
+    justify-content: flex-end;   /* the track is wider than the content now */
     text-align: right;
+    min-width: 0;
+  }
+  /* Only the pill gives ground; the readouts keep their natural width. */
+  .card .metrics .metric:first-child { min-width: 0; }
+  .state-pill { max-width: 100%; }
+  .state-pill [data-statetext] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .metric .val {
     font-family: 'Oswald', sans-serif;
@@ -469,7 +493,7 @@
     font-family: 'Oswald', sans-serif;
     font-weight: 500;
     font-size: 16px;
-    letter-spacing: 1.5px;
+    letter-spacing: 1.1px;
     text-transform: uppercase;
     padding: 6px 14px;
     border-radius: 999px;
@@ -546,6 +570,7 @@
     <div id="inset" hidden>
       <div class="inset-head">
         <span class="ih-tag">Detail</span>
+        <span class="ih-count" data-inset-count hidden></span>
         <span class="ih-place" data-inset-place>--</span>
       </div>
       <div class="inset-body">
@@ -817,13 +842,20 @@ const INSET_W           = 384; // panel size inside the map frame
 const INSET_H           = 300;
 const INSET_PADDING_PX  = 30;  // breathing room around the group inside it
 const INSET_MAX_ZOOM    = 13;
+// When the board splits into more than one group -- everyone in a different
+// state, say -- the panel cannot show them all at once and picking a favourite
+// would be arbitrary. It cycles instead, this many seconds each. Long enough
+// to take one in from across the room, short enough that a full lap fits in a
+// glance. Set to 0 to pin it on the first group and never rotate.
+const INSET_ROTATE_S    = 10;
 const INSET_TRAIL_WIDTH = 3;     // same core:casing ratio as the big map
 const INSET_CASING_WIDTH = 4.8;
 const INSET_TRAIL_OFFSET_PX = 4;
 
 const TRAIL_CULL_PX     = 240; // skip drawing trails this far off canvas
-const CITY_MAX_KM       = 120; // past this the CITIES list is guessing, so
-                               // the pill switches to a grid square
+const CITY_NEAR_KM      = 60;  // within this, name the city outright
+const CITY_AREA_KM      = 240; // within this, hedge it to "near <city>";
+                               // past it, fall back to the grid square
 
 /* ============================================================
    STATE
@@ -838,9 +870,18 @@ let insetMap, insetCanvas, insetCtx, insetAvatarLayer;
 // Callsigns, not host objects: applyData rebuilds the whole hosts array on
 // every poll, and frameBounds only re-runs when the fit signature moves, so
 // anything holding an object reference here would quietly go stale and the
-// inset would freeze on an old track. Empty means the panel is shut, which is
-// also what tells frameBounds which side of the hysteresis it is on.
+// inset would freeze on an old track.
 let insetHosts = [];
+// Every group the panel has to get through, as arrays of callsigns, and where
+// in that rotation it is. Empty means the panel is shut, which is also what
+// tells frameBounds which side of the hysteresis it is on.
+let insetSubjects = [];
+let insetIndex = 0;
+let insetHeldS = 0;
+// Callsigns sharing a group with somebody else. Their tags come off the wide
+// map, and this is deliberately not "whoever is in the panel right now" --
+// tying it to the rotation would flicker every tag every ten seconds.
+let insetGrouped = {};
 let tickCount = 0;
 let lastDrawMs = 0;
 const FRAME_MIN_MS = 1000 / RENDER_FPS;
@@ -883,9 +924,16 @@ function compass(deg) {
 /* ============================================================
    CITY LOOKUP (offline, no API)
    The state pill shows the city a host was last reported in.
-   Nearest entry wins. Dense around SE Michigan, with wider
-   Michigan coverage for road trips and POTA runs. Add rows
+   Nearest entry wins. Dense around SE Michigan, thinning out
+   through the state and then across the country, so a host on a
+   trip gets a place name rather than a grid reference. Add rows
    freely; format is [name, lat, lng].
+
+   How far the nearest entry is decides how the label is phrased:
+   inside CITY_NEAR_KM it is quoted plainly, past that it is
+   hedged to "near X", and past CITY_AREA_KM -- open water, or
+   somewhere this list simply does not reach -- it falls back to
+   the grid square.
    ============================================================ */
 const CITIES = [
   // Oakland / home turf
@@ -926,6 +974,110 @@ const CITIES = [
   ['Mackinaw City',45.7775,-84.7271],['St. Ignace',45.8683,-84.7273],['Sault Ste. Marie',46.4953,-84.3453],
   ['Munising',46.4111,-86.6479],['Marquette',46.5436,-87.3954],['Escanaba',45.7452,-87.0646],
   ['Houghton',47.1211,-88.5690],
+
+  // ---- the rest of the country -------------------------------------------
+  // Coarser than the Michigan block above on purpose: enough that a host on a
+  // trip gets a place name instead of a grid square, not so much that this
+  // file turns into a gazetteer. Out-of-state entries carry their state, both
+  // because the board is Michigan-centric and because several of these share a
+  // name with a town up here (Birmingham, Jackson, Monroe, Rochester).
+  // Great Lakes / Midwest
+  ['Toledo OH',41.6528,-83.5379],['Cleveland OH',41.4993,-81.6944],['Akron OH',41.0814,-81.5190],
+  ['Columbus OH',39.9612,-83.0007],['Dayton OH',39.7589,-84.1916],['Cincinnati OH',39.1031,-84.5120],
+  ['Youngstown OH',41.0998,-80.6495],['Sandusky OH',41.4489,-82.7080],
+  ['Fort Wayne IN',41.0793,-85.1394],['South Bend IN',41.6764,-86.2520],
+  ['Indianapolis IN',39.7684,-86.1581],['Evansville IN',37.9716,-87.5711],
+  ['Chicago IL',41.8781,-87.6298],['Rockford IL',42.2711,-89.0940],['Peoria IL',40.6936,-89.5890],
+  ['Springfield IL',39.7817,-89.6501],['Champaign IL',40.1164,-88.2434],
+  ['Milwaukee WI',43.0389,-87.9065],['Madison WI',43.0731,-89.4012],['Green Bay WI',44.5133,-88.0133],
+  ['Eau Claire WI',44.8113,-91.4985],['Superior WI',46.7208,-92.1041],
+  ['Minneapolis MN',44.9778,-93.2650],['St. Paul MN',44.9537,-93.0900],['Duluth MN',46.7867,-92.1005],
+  ['Rochester MN',44.0121,-92.4802],
+  ['Des Moines IA',41.5868,-93.6250],['Cedar Rapids IA',41.9779,-91.6656],
+  ['St. Louis MO',38.6270,-90.1994],['Kansas City MO',39.0997,-94.5786],['Springfield MO',37.2090,-93.2923],
+  ['Omaha NE',41.2565,-95.9345],['Lincoln NE',40.8136,-96.7026],
+  ['Wichita KS',37.6872,-97.3301],['Topeka KS',39.0473,-95.6752],
+  ['Fargo ND',46.8772,-96.7898],['Bismarck ND',46.8083,-100.7837],
+  ['Sioux Falls SD',43.5460,-96.7313],['Rapid City SD',44.0805,-103.2310],
+  // Ontario, since the board looks across the river
+  ['Windsor ON',42.3149,-83.0364],['London ON',42.9849,-81.2453],['Toronto ON',43.6532,-79.3832],
+  ['Sarnia ON',42.9745,-82.4066],['Sault Ste. Marie ON',46.5136,-84.3358],
+  // Northeast
+  ['Buffalo NY',42.8864,-78.8784],['Rochester NY',43.1566,-77.6088],['Syracuse NY',43.0481,-76.1474],
+  ['Albany NY',42.6526,-73.7562],['Binghamton NY',42.0987,-75.9180],['New York NY',40.7128,-74.0060],
+  ['Erie PA',42.1292,-80.0851],['Pittsburgh PA',40.4406,-79.9959],['Harrisburg PA',40.2732,-76.8867],
+  ['Scranton PA',41.4090,-75.6624],['Allentown PA',40.6084,-75.4902],['Philadelphia PA',39.9526,-75.1652],
+  ['Newark NJ',40.7357,-74.1724],['Trenton NJ',40.2171,-74.7429],['Atlantic City NJ',39.3643,-74.4229],
+  ['Hartford CT',41.7658,-72.6734],['New Haven CT',41.3083,-72.9279],
+  ['Providence RI',41.8240,-71.4128],['Boston MA',42.3601,-71.0589],['Worcester MA',42.2626,-71.8023],
+  ['Springfield MA',42.1015,-72.5898],['Manchester NH',42.9956,-71.4548],['Concord NH',43.2081,-71.5376],
+  ['Portland ME',43.6591,-70.2568],['Bangor ME',44.8016,-68.7712],
+  ['Burlington VT',44.4759,-73.2121],['Montpelier VT',44.2601,-72.5754],
+  // Mid-Atlantic
+  ['Baltimore MD',39.2904,-76.6122],['Annapolis MD',38.9784,-76.4922],['Washington DC',38.9072,-77.0369],
+  ['Wilmington DE',39.7391,-75.5398],['Richmond VA',37.5407,-77.4360],['Virginia Beach VA',36.8529,-75.9780],
+  ['Roanoke VA',37.2710,-79.9414],['Charleston WV',38.3498,-81.6326],['Morgantown WV',39.6295,-79.9559],
+  // South
+  ['Louisville KY',38.2527,-85.7585],['Lexington KY',38.0406,-84.5037],
+  ['Nashville TN',36.1627,-86.7816],['Memphis TN',35.1495,-90.0490],['Knoxville TN',35.9606,-83.9207],
+  ['Chattanooga TN',35.0456,-85.3097],
+  ['Charlotte NC',35.2271,-80.8431],['Raleigh NC',35.7796,-78.6382],['Greensboro NC',36.0726,-79.7920],
+  ['Asheville NC',35.5951,-82.5515],['Wilmington NC',34.2257,-77.9447],
+  ['Columbia SC',34.0007,-81.0348],['Charleston SC',32.7765,-79.9311],['Greenville SC',34.8526,-82.3940],
+  ['Atlanta GA',33.7490,-84.3880],['Savannah GA',32.0809,-81.0912],['Augusta GA',33.4735,-81.9748],
+  ['Birmingham AL',33.5186,-86.8104],['Montgomery AL',32.3668,-86.3000],['Mobile AL',30.6954,-88.0399],
+  ['Huntsville AL',34.7304,-86.5861],
+  ['Jackson MS',32.2988,-90.1848],['Gulfport MS',30.3674,-89.0928],
+  ['New Orleans LA',29.9511,-90.0715],['Baton Rouge LA',30.4515,-91.1871],['Shreveport LA',32.5252,-93.7502],
+  ['Little Rock AR',34.7465,-92.2896],['Fayetteville AR',36.0626,-94.1574],
+  // Florida
+  ['Jacksonville FL',30.3322,-81.6557],['Tallahassee FL',30.4383,-84.2807],['Orlando FL',28.5383,-81.3792],
+  ['Daytona Beach FL',29.2108,-81.0228],['Tampa FL',27.9506,-82.4572],['Fort Myers FL',26.6406,-81.8723],
+  ['West Palm Beach FL',26.7153,-80.0534],['Miami FL',25.7617,-80.1918],['Key West FL',24.5551,-81.7800],
+  ['Pensacola FL',30.4213,-87.2169],
+  // Plains / Southwest
+  ['Oklahoma City OK',35.4676,-97.5164],['Tulsa OK',36.1540,-95.9928],
+  ['Dallas TX',32.7767,-96.7970],['Fort Worth TX',32.7555,-97.3308],['Houston TX',29.7604,-95.3698],
+  ['San Antonio TX',29.4241,-98.4936],['Austin TX',30.2672,-97.7431],['El Paso TX',31.7619,-106.4850],
+  ['Amarillo TX',35.2220,-101.8313],['Lubbock TX',33.5779,-101.8552],
+  ['Albuquerque NM',35.0844,-106.6504],['Santa Fe NM',35.6870,-105.9378],
+  ['Phoenix AZ',33.4484,-112.0740],['Tucson AZ',32.2226,-110.9747],['Flagstaff AZ',35.1983,-111.6513],
+  // Mountain / West
+  ['Denver CO',39.7392,-104.9903],['Colorado Springs CO',38.8339,-104.8214],['Grand Junction CO',39.0639,-108.5506],
+  ['Cheyenne WY',41.1400,-104.8202],['Casper WY',42.8666,-106.3131],
+  ['Billings MT',45.7833,-108.5007],['Helena MT',46.5891,-112.0391],['Missoula MT',46.8721,-113.9940],
+  ['Salt Lake City UT',40.7608,-111.8910],['Boise ID',43.6150,-116.2023],
+  ['Las Vegas NV',36.1699,-115.1398],['Reno NV',39.5296,-119.8138],
+  ['Spokane WA',47.6588,-117.4260],['Seattle WA',47.6062,-122.3321],
+  ['Portland OR',45.5152,-122.6784],['Eugene OR',44.0521,-123.0868],['Medford OR',42.3265,-122.8756],
+  ['Sacramento CA',38.5816,-121.4944],['San Francisco CA',37.7749,-122.4194],['San Jose CA',37.3382,-121.8863],
+  ['Fresno CA',36.7378,-119.7871],['Bakersfield CA',35.3733,-119.0187],['Los Angeles CA',34.0522,-118.2437],
+  ['San Diego CA',32.7157,-117.1611],
+  ['Anchorage AK',61.2181,-149.9003],['Fairbanks AK',64.8378,-147.7164],['Juneau AK',58.3019,-134.4197],
+  ['Honolulu HI',21.3069,-157.8583],
+  // Gap fillers. Without these the interior West and the rural Plains fall
+  // through to a grid square, which is honest but unhelpful when somebody is
+  // genuinely parked out there on a rove.
+  ['North Platte NE',41.1239,-100.7654],['Scottsbluff NE',41.8666,-103.6672],
+  ['Sioux City IA',42.4999,-96.4003],['Salina KS',38.8403,-97.6114],['Dodge City KS',37.7528,-100.0171],
+  ['Pierre SD',44.3683,-100.3510],['Williston ND',48.1470,-103.6180],['Minot ND',48.2330,-101.2923],
+  ['Mankato MN',44.1636,-93.9994],['Bemidji MN',47.4736,-94.8803],['La Crosse WI',43.8014,-91.2396],
+  ['Wausau WI',44.9591,-89.6301],['Thunder Bay ON',48.3809,-89.2477],
+  ['Cape Girardeau MO',37.3059,-89.5181],['Paducah KY',37.0834,-88.6000],['Bowling Green KY',36.9685,-86.4808],
+  ['Tupelo MS',34.2576,-88.7034],['Dothan AL',31.2232,-85.3905],['Valdosta GA',30.8327,-83.2785],
+  ['Gainesville FL',29.6516,-82.3248],['Ocala FL',29.1872,-82.1401],
+  ['Wichita Falls TX',33.9137,-98.4934],['Abilene TX',32.4487,-99.7331],['San Angelo TX',31.4638,-100.4370],
+  ['Odessa TX',31.8457,-102.3676],['Laredo TX',27.5064,-99.5075],['Corpus Christi TX',27.8006,-97.3964],
+  ['Brownsville TX',25.9017,-97.4975],
+  ['Roswell NM',33.3943,-104.5230],['Farmington NM',36.7281,-108.2187],
+  ['Pueblo CO',38.2544,-104.6091],['Alamosa CO',37.4695,-105.8700],
+  ['Laramie WY',41.3114,-105.5911],['Rock Springs WY',41.5875,-109.2029],
+  ['Great Falls MT',47.5053,-111.3008],['Butte MT',46.0038,-112.5348],['Kalispell MT',48.1958,-114.3129],
+  ['Idaho Falls ID',43.4917,-112.0339],['Pocatello ID',42.8713,-112.4455],['Twin Falls ID',42.5558,-114.4701],
+  ['Ely NV',39.2472,-114.8883],['Elko NV',40.8324,-115.7631],['Winnemucca NV',40.9730,-117.7357],
+  ['Moab UT',38.5733,-109.5498],['St. George UT',37.0965,-113.5684],['Page AZ',36.9147,-111.4558],
+  ['Bend OR',44.0582,-121.3153],['Yakima WA',46.6021,-120.5059],
+  ['Redding CA',40.5865,-122.3917],['Barstow CA',34.8958,-117.0173],['Bishop CA',37.3614,-118.3951],
 ];
 
 function nearestCity(p) {
@@ -935,11 +1087,12 @@ function nearestCity(p) {
     if (km < bestKm) { bestKm = km; best = name; }
   }
   if (!best) return '--';
-  // The list is Michigan-centric on purpose. A host in Florida would otherwise
-  // be labelled with whichever Michigan town happened to be least far away,
-  // which reads as a bug. Past CITY_MAX_KM, fall back to the grid square.
-  if (bestKm > CITY_MAX_KM) return 'Grid ' + gridSquare(p).slice(0, 4);
-  return best;
+  // Say how sure we are. Naming a city 90 miles away as though the host were
+  // standing in it is the failure mode here, and it is worse than a vaguer
+  // label -- the list thins out a long way from home.
+  if (bestKm <= CITY_NEAR_KM) return best;
+  if (bestKm <= CITY_AREA_KM) return 'near ' + best;
+  return 'Grid ' + gridSquare(p).slice(0, 4);
 }
 
 /* ============================================================
@@ -1326,18 +1479,48 @@ function insetRoster() {
 // Pass the hosts to frame, or null to shut the panel. Fewer than two is the
 // same as null: a lone host is a lone dot, and a dot is legible anywhere on
 // the wide map without help.
-function setInset(list) {
+// Hand over every group the panel should cycle through, as arrays of hosts,
+// or null to shut it. Whoever is on screen stays on screen if they are still
+// in the list, so a poll landing mid-rotation does not jump the view.
+function setInset(groups) {
   const panel = document.getElementById('inset');
-  if (!list || list.length < 2) {
+  if (!groups || !groups.length) {
+    insetSubjects = [];
     insetHosts = [];
+    insetGrouped = {};
     panel.hidden = true;
     return;
   }
+  const leadNow = insetSubjects[insetIndex] ? insetSubjects[insetIndex][0] : null;
+  insetSubjects = groups.map(g => g.map(h => h.call));
+  insetGrouped = {};
+  insetSubjects.forEach(g => {
+    if (g.length > 1) g.forEach(call => { insetGrouped[call] = true; });
+  });
+
+  let idx = insetSubjects.findIndex(g => g.indexOf(leadNow) !== -1);
+  if (idx < 0) { idx = 0; insetHeldS = 0; }
+  insetIndex = idx;
+  showInsetSubject();
+}
+
+// Frame the panel on whichever group the rotation is currently up to.
+function showInsetSubject() {
+  const panel = document.getElementById('inset');
+  const calls = insetSubjects[insetIndex];
+  if (!calls) { insetHosts = []; panel.hidden = true; return; }
+  const list = calls.map(c => hosts.find(h => h.call === c)).filter(Boolean);
+  if (!list.length) { insetHosts = []; panel.hidden = true; return; }
+
   const opening = panel.hidden;
   panel.hidden = false;                      // Leaflet needs a laid-out box
   if (!insetMap) initInsetMap();
   else if (opening) { insetMap.invalidateSize(); sizeInsetCanvas(); }
   insetHosts = list.map(h => h.call);
+
+  const counter = document.querySelector('[data-inset-count]');
+  counter.hidden = insetSubjects.length < 2;
+  counter.textContent = (insetIndex + 1) + '/' + insetSubjects.length;
 
   const b = L.latLngBounds(list.reduce((acc, h) => acc.concat(hostFitPoints(h)), []));
   if (b.getNorthEast().equals(b.getSouthWest())) {
@@ -1455,21 +1638,34 @@ function spreadMi(list) {
   return max;
 }
 
-// Which host is the odd one out? Score each by the total distance to everyone
-// else: two hosts in Oakland County both score low, the one in Florida scores
-// huge. Ties (a two-host board, where both sums are identical) go to whoever
-// is further from home, so the board stays anchored where the show lives.
-function mostOutlying(list) {
-  const sums = list.map(a => list.reduce((t, b) => t + haversineKm(a.latest, b.latest), 0));
-  let worst = 0;
-  for (let i = 1; i < list.length; i++) {
-    const d = sums[i] - sums[worst];
-    if (d > 1) worst = i;
-    else if (Math.abs(d) <= 1 &&
-             haversineKm(list[i].latest, CLARKSTON) >
-             haversineKm(list[worst].latest, CLARKSTON)) worst = i;
+// Single-linkage grouping: everybody starts alone, and two groups merge while
+// their nearest members are within groupMi. With a roster this size the cost
+// does not matter and the behaviour is easy to predict -- a chain of hosts
+// strung along one highway stays one group, which is what you would want.
+function clusterHosts(list, groupMi) {
+  let groups = list.map(e => [e]);
+  for (let merged = true; merged; ) {
+    merged = false;
+    outer:
+    for (let i = 0; i < groups.length; i++) {
+      for (let j = i + 1; j < groups.length; j++) {
+        let near = Infinity;
+        groups[i].forEach(a => groups[j].forEach(b => {
+          near = Math.min(near, haversineKm(a.latest, b.latest) * KM_TO_MI);
+        }));
+        if (near <= groupMi) {
+          groups[i] = groups[i].concat(groups[j]);
+          groups.splice(j, 1);
+          merged = true;
+          break outer;
+        }
+      }
+    }
   }
-  return worst;
+  // Roster order, so the rotation runs in the same sequence as the cards below
+  // rather than reshuffling itself every poll.
+  const rank = g => Math.min.apply(null, g.map(e => hosts.indexOf(e.h)));
+  return groups.sort((a, b) => rank(a) - rank(b));
 }
 
 function fitSignature() {
@@ -1492,23 +1688,23 @@ function frameBounds() {
 
   // Everybody stays in the wide frame, always -- that long line out to
   // wherever somebody drove is the point of the board. What the spread
-  // decides is whether the ones still together also need their own panel.
+  // decides is whether anybody also needs their own panel.
   //
   // Two separate questions. Whether to open at all is a plain distance with
   // a hysteresis band, so the panel does not blink while somebody idles on
-  // the line. Who goes in it is a fraction of the current spread, so the
-  // grouping keeps working whether the board is showing two states or the
-  // whole country.
+  // the line. How the board divides up is a fraction of the current spread,
+  // so the grouping keeps working whether the wide view is showing two
+  // states or the whole country.
   const spread = spreadMi(live);
-  const groupMi = spread * INSET_GROUP_FRACTION;
-  const core = live.slice();
-  while (core.length > 1 && spreadMi(core) > groupMi) {
-    core.splice(mostOutlying(core), 1);
-  }
-  const limit = insetHosts.length ? INSET_CLEAR_MI : INSET_TRIGGER_MI;
-  setInset(INSET_ENABLE && spread > limit &&
-           core.length > 1 && core.length < live.length
-    ? core.map(e => e.h)
+  const groups = clusterHosts(live, spread * INSET_GROUP_FRACTION);
+  const limit = insetSubjects.length ? INSET_CLEAR_MI : INSET_TRIGGER_MI;
+
+  // One group means nobody is being crushed by anybody else's distance, so
+  // there is nothing the panel could add. Two or more and it cycles them --
+  // including groups of one, because a host off on his own is exactly the one
+  // whose local roads the wide view has zoomed past.
+  setInset(INSET_ENABLE && spread > limit && groups.length > 1
+    ? groups.map(g => g.map(e => e.h))
     : null);
 
   const b = L.latLngBounds(
@@ -1522,7 +1718,7 @@ function frameBounds() {
   // on top of a host. setInset has already laid the panel out, so its real
   // height is measurable here.
   const panel = document.getElementById('inset');
-  const reserve = insetHosts.length ? panel.offsetHeight + 24 : 0;
+  const reserve = insetSubjects.length ? panel.offsetHeight + 24 : 0;
   map.fitBounds(b, {
     paddingTopLeft: [FIT_PADDING_PX, FIT_PADDING_PX],
     paddingBottomRight: [FIT_PADDING_PX, FIT_PADDING_PX + reserve],
@@ -1754,7 +1950,10 @@ function renderLoop(nowMs) {
     lastDrawMs = nowMs;
     drawTrails();
     drawAvatars();
-    if (insetHosts.length) { drawInsetTrails(); drawInsetAvatars(); }
+    if (insetSubjects.length && insetHosts.length) {
+      drawInsetTrails();
+      drawInsetAvatars();
+    }
   }
   requestAnimationFrame(renderLoop);
 }
@@ -1909,7 +2108,7 @@ function drawAvatars() {
 
     el.classList.toggle('rolling', d.state === 'ROLLING');
     el.classList.toggle('dim', d.state === 'NOTHEARD');
-    el.classList.toggle('grouped', insetHosts.indexOf(host.call) !== -1);
+    el.classList.toggle('grouped', !!insetGrouped[host.call]);
   });
 }
 
@@ -1918,6 +2117,18 @@ function drawAvatars() {
    ============================================================ */
 function masterTick() {
   tickCount++;
+
+  // Advance the panel's rotation. Driven off the master tick rather than its
+  // own timer so it cannot drift out of step with the rest of the board.
+  if (INSET_ROTATE_S > 0 && insetSubjects.length > 1) {
+    if (++insetHeldS >= INSET_ROTATE_S) {
+      insetHeldS = 0;
+      insetIndex = (insetIndex + 1) % insetSubjects.length;
+      showInsetSubject();
+    }
+  } else {
+    insetHeldS = 0;
+  }
 
   const now = new Date();
   const zz = String(now.getUTCHours()).padStart(2,'0') + ':' +
