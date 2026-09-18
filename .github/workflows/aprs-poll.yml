@@ -31,7 +31,7 @@ jobs:
 
       - name: Commit and push (resilient to concurrent updates)
         run: |
-          if [[ -z "$(git status --porcelain host-tracker.json)" ]]; then
+          if [[ -z "$(git status --porcelain -- host-tracker.json history)" ]]; then
             echo "no change this run"; exit 0
           fi
           git config user.name  "aprs-bot"
@@ -43,8 +43,20 @@ jobs:
           for i in 1 2 3 4 5; do
             git fetch origin main
             git reset --hard origin/main
+
+            # The live window is a full snapshot, so copying ours back over
+            # whatever the remote has is right: it is the newer of the two.
             cp /tmp/host-tracker.json host-tracker.json
-            git add host-tracker.json
+
+            # The archive is NOT a snapshot. The reset above just threw away
+            # our appended lines, and a concurrent runner may have added its
+            # own, so copying a saved copy back would drop them. Re-run the
+            # append instead: it reads whatever is now on disk and adds only
+            # the points missing from it, deduped on (call, time). That merges
+            # rather than clobbers, and repeating it on every retry is free.
+            python aprs_poller.py --append-pending
+
+            git add host-tracker.json history
             if git diff --cached --quiet; then
               echo "remote already up to date"; exit 0
             fi
