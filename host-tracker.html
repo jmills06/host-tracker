@@ -239,9 +239,10 @@
     white-space: nowrap;
   }
 
-  /* Hosts the inset has taken over. On the wide map they are stacked on top
-     of each other, so their tags collide into a smear; the panel below names
-     them properly a few inches away, and the avatar colours still say who. */
+  /* Hosts sharing one of the inset's subjects. Being in the same place is why
+     they share it, so on the wide map they are stacked on top of each other
+     and their tags collide into a smear; the panel names them properly a few
+     inches away, and the avatar colours still say who. */
   .host-marker.grouped .host-tag { display: none; }
 
   /* Glyph badge on the callsign tag, tying a marker to its trail. The roster
@@ -807,46 +808,66 @@ const FIT_FALLBACK_ZOOM = 11;
 const AUTO_REFIT        = true;
 
 // Detail inset. The main map always frames everybody -- a host on a road trip
-// two states away is half the fun of the board, and cropping them out loses
-// the long line that says so. The cost is that whoever stayed home collapses
-// into one blob at that zoom, so once the group spreads past
-// INSET_TRIGGER_MI a second little map opens in the corner, framed on
-// whoever is still together, and the wide view keeps the story.
+// two states away is half the fun of the board, and cropping him out loses the
+// long line that says so. The cost is that once the wide view has pulled back
+// far enough to hold all three of us, nobody's local detail survives it: the
+// whole board turns into three dots on a country. So a second little map opens
+// in the corner and tours the roster, giving each host -- or each set of hosts
+// who are in the same place -- a close-up in turn, while the wide view above it
+// keeps the story.
 //
-// The trigger is a plain distance -- the greatest gap between any two hosts
-// right now -- because that is the thing you can judge by eye when you decide
-// the board looks wrong. For scale, from Clarkston:
+// What opens it is the wide map's own zoom once it has fitted everybody. That
+// is the thing actually being complained about: not how far apart we are, but
+// how far out the board had to pull to hold us. Unlike a distance between
+// hosts it stays honest however the fit was arrived at, which matters because
+// FIT_MODE frames whole trails -- all three of us standing in the same parking
+// lot in Dayton still drag the view out to zoom 8.7, and still need the panel.
 //
-//    Novi            30 mi        Chicago          240 mi
-//    Columbus OH    180 mi        Houghton (UP)    400 mi
-//    Traverse City  180 mi        Nashville        470 mi
-//    Dayton OH      210 mi        Miami          1,170 mi
+// Measured on this 1080x1920 board, two of us home and one away:
 //
-// At the default 250 the inset stays shut for a Hamvention run or a weekend
-// up in Traverse City -- the locals are still 97-128px apart up there, which
-// reads fine -- and opens for the UP and anything further. Drop it to ~150 to
-// have it open on shorter trips, raise it to keep the board plain. Set
-// INSET_ENABLE = false to turn it off entirely.
+//    everyone home / around the metro   z11.7      Traverse City (180 mi)  z8.9
+//    Ann Arbor (45 mi)                  z11.2      all three to Dayton     z8.7
+//    Lansing (60 mi)                     z9.9      Munising, the UP        z7.8
+//    Grand Rapids (135 mi)               z9.0      Florida                 z6.2
+//                                                  all three far apart     z5.5
+//
+// The break between "still around home" and "somebody left" sits around 10.5,
+// and the default of 9 puts the panel on for a real trip while leaving it shut
+// for anything inside the metro. Raise it to 10 to have it open on a Lansing
+// day trip, drop it to 8.5 for roughly the old 250-mile behaviour (shut for a
+// Traverse City weekend). Set INSET_ENABLE = false to turn it off entirely.
 const INSET_ENABLE      = true;
-const INSET_TRIGGER_MI  = 250;
-// Closes again a bit tighter than it opens, so a host parked near the line
-// does not pop the panel in and out every time a beacon lands.
-const INSET_CLEAR_MI    = 200;
-// Once it is open, who goes in it: the hosts whose own span is inside this
-// fraction of the board's full spread. Deliberately a ratio and not a second
-// distance, because being crushed is relative -- two hosts 200 miles apart
-// are one blob on a view of the whole country and perfectly separate on a
-// view of two states. Leave it alone; INSET_TRIGGER_MI is the knob.
-const INSET_GROUP_FRACTION = 0.25;
+const INSET_WIDE_ZOOM   = 9;
+// Stickiness once it is up: it shuts again only this much further in than it
+// opened. The wide fit runs at zoomSnap 0.1 and a single beacon moves the zoom
+// by around 0.05, so half a level is roughly ten beacons of slack -- enough
+// that a host idling on the line cannot pop the panel in and out, and small
+// enough that it lets go promptly when he really does come home. A whole level
+// would be twice the distance and leave the panel up most of the way back.
+const INSET_HOLD_MARGIN = 0.5;
+// Who shares a close-up. Hosts within this of each other get one frame between
+// them instead of near-identical frames one after the other, so James in New
+// Mexico with Jim and Rory both in Dayton tours two subjects, not three. Note
+// that Clarkston and South Lyon are 22 miles apart, so on an ordinary day the
+// three of us are three subjects -- which is the point, each of us gets our
+// own streets. Deliberately a plain distance and not a fraction of the spread:
+// "the same place" means the same place whether the wide view is showing two
+// states or the whole country.
+const INSET_TOGETHER_MI = 15;
 const INSET_W           = 384; // panel size inside the map frame
 const INSET_H           = 300;
-const INSET_PADDING_PX  = 30;  // breathing room around the group inside it
+const INSET_PADDING_PX  = 30;  // breathing room around the subject inside it
+// The panel frames where people are *now*, not their whole 72h trail. Fitting
+// the trail made it useless for exactly the trips it exists for: Rory's drive
+// to the UP is 400 miles long, so a panel fitted to it came out at roughly the
+// wide map's own zoom and showed the same picture twice. Current positions,
+// plus whatever road happens to run through the frame, is the close-up. At 13
+// the panel covers about two and a half miles.
 const INSET_MAX_ZOOM    = 13;
-// When the board splits into more than one group -- everyone in a different
-// state, say -- the panel cannot show them all at once and picking a favourite
-// would be arbitrary. It cycles instead, this many seconds each. Long enough
-// to take one in from across the room, short enough that a full lap fits in a
-// glance. Set to 0 to pin it on the first group and never rotate.
+// One host on his own and a pair in the same town cannot share the panel, so
+// it cycles the subjects, this many seconds each. Long enough to take one in
+// from across the room, short enough that a full lap fits in a glance. Set to
+// 0 to pin it on the first subject and never rotate.
 const INSET_ROTATE_S    = 10;
 const INSET_TRAIL_WIDTH = 3;     // same core:casing ratio as the big map
 const INSET_CASING_WIDTH = 4.8;
@@ -1476,12 +1497,12 @@ function insetRoster() {
     .filter(Boolean);
 }
 
-// Pass the hosts to frame, or null to shut the panel. Fewer than two is the
-// same as null: a lone host is a lone dot, and a dot is legible anywhere on
-// the wide map without help.
-// Hand over every group the panel should cycle through, as arrays of hosts,
-// or null to shut it. Whoever is on screen stays on screen if they are still
-// in the list, so a poll landing mid-rotation does not jump the view.
+// Hand over every subject the panel should tour, as arrays of hosts -- one
+// array per place, so hosts who are together share a frame -- or null to shut
+// it. A subject of one is normal and wanted: a host off on his own is exactly
+// the one whose local roads the wide view has zoomed past. Whoever is on
+// screen stays on screen if they are still in the list, so a poll landing
+// mid-rotation does not jump the view.
 function setInset(groups) {
   const panel = document.getElementById('inset');
   if (!groups || !groups.length) {
@@ -1522,7 +1543,13 @@ function showInsetSubject() {
   counter.hidden = insetSubjects.length < 2;
   counter.textContent = (insetIndex + 1) + '/' + insetSubjects.length;
 
-  const b = L.latLngBounds(list.reduce((acc, h) => acc.concat(hostFitPoints(h)), []));
+  // Latest positions only. hostFitPoints (whole trail) belongs to the wide
+  // map; using it here would frame Rory's entire drive to the UP and hand back
+  // the wide view at panel size. See INSET_MAX_ZOOM.
+  const b = L.latLngBounds(list.map(h => {
+    const p = h.track[h.track.length - 1];
+    return [p.lat, p.lng];
+  }));
   if (b.getNorthEast().equals(b.getSouthWest())) {
     insetMap.setView(b.getCenter(), INSET_MAX_ZOOM, { animate: false });
   } else {
@@ -1624,24 +1651,11 @@ function hostFitPoints(h) {
   return [[last.lat, last.lng]];
 }
 
-// Widest gap between any two hosts right now, in miles. This is the number
-// the inset triggers on, because it is the one you can judge by eye when you
-// look up at the board and decide it has gone wrong.
-function spreadMi(list) {
-  let max = 0;
-  for (let i = 0; i < list.length; i++) {
-    for (let j = i + 1; j < list.length; j++) {
-      const d = haversineKm(list[i].latest, list[j].latest) * KM_TO_MI;
-      if (d > max) max = d;
-    }
-  }
-  return max;
-}
-
-// Single-linkage grouping: everybody starts alone, and two groups merge while
-// their nearest members are within groupMi. With a roster this size the cost
-// does not matter and the behaviour is easy to predict -- a chain of hosts
-// strung along one highway stays one group, which is what you would want.
+// Single-linkage grouping into places: everybody starts alone, and two groups
+// merge while their nearest members are within groupMi. With a roster this
+// size the cost does not matter and the behaviour is easy to predict -- a
+// chain of hosts strung along one highway stays one group, which is what you
+// would want.
 function clusterHosts(list, groupMi) {
   let groups = list.map(e => [e]);
   for (let merged = true; merged; ) {
@@ -1675,6 +1689,22 @@ function fitSignature() {
   }).join('|') + '|' + FIT_MODE;
 }
 
+// Lay the wide view over the whole roster. reserveBottom keeps that many
+// pixels clear at the foot of the frame so the panel does not land on top of
+// a host; it is measured, so it can only be passed once the panel is up.
+function fitWide(b, reserveBottom) {
+  if (b.getNorthEast().equals(b.getSouthWest())) {
+    map.setView(b.getCenter(), FIT_MAX_ZOOM, { animate: false });
+    return;
+  }
+  map.fitBounds(b, {
+    paddingTopLeft: [FIT_PADDING_PX, FIT_PADDING_PX],
+    paddingBottomRight: [FIT_PADDING_PX, FIT_PADDING_PX + reserveBottom],
+    maxZoom: FIT_MAX_ZOOM,
+    animate: false
+  });
+}
+
 function frameBounds() {
   const live = hosts
     .filter(h => h.track && h.track.length)
@@ -1687,44 +1717,31 @@ function frameBounds() {
   }
 
   // Everybody stays in the wide frame, always -- that long line out to
-  // wherever somebody drove is the point of the board. What the spread
-  // decides is whether anybody also needs their own panel.
-  //
-  // Two separate questions. Whether to open at all is a plain distance with
-  // a hysteresis band, so the panel does not blink while somebody idles on
-  // the line. How the board divides up is a fraction of the current spread,
-  // so the grouping keeps working whether the wide view is showing two
-  // states or the whole country.
-  const spread = spreadMi(live);
-  const groups = clusterHosts(live, spread * INSET_GROUP_FRACTION);
-  const limit = insetSubjects.length ? INSET_CLEAR_MI : INSET_TRIGGER_MI;
-
-  // One group means nobody is being crushed by anybody else's distance, so
-  // there is nothing the panel could add. Two or more and it cycles them --
-  // including groups of one, because a host off on his own is exactly the one
-  // whose local roads the wide view has zoomed past.
-  setInset(INSET_ENABLE && spread > limit && groups.length > 1
-    ? groups.map(g => g.map(e => e.h))
-    : null);
-
+  // wherever somebody drove is the point of the board.
   const b = L.latLngBounds(
     live.reduce((acc, e) => acc.concat(hostFitPoints(e.h)), []));
 
-  if (b.getNorthEast().equals(b.getSouthWest())) {
-    map.setView(b.getCenter(), FIT_MAX_ZOOM, { animate: false });
-    return;
+  // First pass with nothing reserved, purely to find out how far the view has
+  // to pull back to hold everyone. That zoom is the entire trigger: it is low
+  // exactly when the board has stopped being able to show anybody's local
+  // roads, which is the one thing the panel is there to put back.
+  fitWide(b, 0);
+  const gate = INSET_WIDE_ZOOM + (insetSubjects.length ? INSET_HOLD_MARGIN : 0);
+  const open = INSET_ENABLE && map.getZoom() <= gate;
+
+  // One subject per place, not per host: two of us in the same town would
+  // otherwise get the same close-up twice in a row.
+  setInset(open
+    ? clusterHosts(live, INSET_TOGETHER_MI).map(g => g.map(e => e.h))
+    : null);
+
+  // Second pass to give the panel back its corner. Reserving space can only
+  // push the wide view further out, never pull it tighter, so a subject that
+  // qualified above still qualifies and one extra pass settles it.
+  if (insetSubjects.length) {
+    const panel = document.getElementById('inset');
+    fitWide(b, panel.offsetHeight + 24);
   }
-  // Reserve the inset's corner in the fit rather than letting the panel land
-  // on top of a host. setInset has already laid the panel out, so its real
-  // height is measurable here.
-  const panel = document.getElementById('inset');
-  const reserve = insetSubjects.length ? panel.offsetHeight + 24 : 0;
-  map.fitBounds(b, {
-    paddingTopLeft: [FIT_PADDING_PX, FIT_PADDING_PX],
-    paddingBottomRight: [FIT_PADDING_PX, FIT_PADDING_PX + reserve],
-    maxZoom: FIT_MAX_ZOOM,
-    animate: false
-  });
 }
 
 /* ============================================================
