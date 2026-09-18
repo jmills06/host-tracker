@@ -582,3 +582,4 @@
 {"call":"N8JRD","time":1789740007,"lat":42.31033,"lng":-83.6875,"speed":103.7,"course":176,"ssid":"N8JRD-1","alt":295.0,"path":"WIDE1-1,qAR,N8HKU-5","comment":"145.150MHz C100 -060 Jim D - FTM500D","symbol":"/k"}
 {"call":"N8JRD","time":1789740308,"lat":42.23483,"lng":-83.68567,"speed":105.6,"course":179,"ssid":"N8JRD-1","alt":258.0,"path":"qAO,W8XM-11","comment":"145.150MHz C100 -060 Jim D - FTM500D","symbol":"/k"}
 {"call":"N8JRD","time":1789740609,"lat":42.1545,"lng":-83.684,"speed":105.6,"course":178,"ssid":"N8JRD-1","alt":250.0,"path":"WIDE1-1,WIDE2-1,qAR,N8HKU-5","comment":"145.150MHz C100 -060 Jim D - FTM500D","symbol":"/k"}
+{"call":"N8JRD","time":1789741813,"lat":41.844,"lng":-83.66833,"speed":105.6,"course":211,"ssid":"N8JRD-1","alt":188.0,"path":"WIDE1-1,WIDE2-1,qAR,N8LPQ-10","comment":"146.520MHz Jim D - FTM500D","symbol":"/k"}
