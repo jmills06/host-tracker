@@ -688,3 +688,5 @@
 {"call":"N8JRD","time":1789840241,"lat":39.593,"lng":-82.42483,"speed":0.0,"course":246,"ssid":"N8JRD-1","alt":308.0,"path":"qAR,K8QIK-2","comment":"146.520MHz Jim D - FTM500D","symbol":"/k"}
 {"call":"W8KNX","time":1789840813,"lat":43.64067,"lng":-83.976,"speed":124.1,"course":137,"ssid":"W8KNX-9","alt":204.0,"path":"WIDE1-1,qAR,JAMTWP","symbol":"/j"}
 {"call":"W8KNX","time":1789841388,"lat":43.48233,"lng":-83.91333,"speed":113.0,"course":123,"ssid":"W8KNX-9","alt":215.0,"path":"WIDE1-1,WIDE2-2,qAR,KC8YVF","symbol":"/j"}
+{"call":"N8JRD","time":1789841442,"lat":39.59317,"lng":-82.42483,"speed":0.0,"course":277,"ssid":"N8JRD-1","alt":311.0,"path":"WIDE1-1,WIDE2-1,qAR,K8QIK-2","comment":"146.520MHz Jim D - FTM500D","symbol":"/k"}
+{"call":"W8KNX","time":1789841689,"lat":43.399,"lng":-83.89083,"speed":120.4,"course":167,"ssid":"W8KNX-9","alt":201.0,"path":"WIDE1-1,WIDE2-2,qAR,JAMTWP","symbol":"/j"}
