@@ -944,3 +944,4 @@
 {"call":"W8KNX","time":1790448783,"lat":42.446,"lng":-83.65017,"speed":31.5,"course":93,"ssid":"W8KNX-9","alt":287.0,"path":"qAR,N8JRD","symbol":"/j"}
 {"call":"W8KNX","time":1790449013,"lat":42.44583,"lng":-83.65,"speed":7.4,"course":32,"ssid":"W8KNX-9","alt":262.0,"path":"WIDE1-1,qAR,N8JRD","symbol":"/j"}
 {"call":"W8KNX","time":1790449289,"lat":42.46117,"lng":-83.63167,"speed":14.8,"course":339,"ssid":"W8KNX-9","alt":286.0,"path":"qAR,N8JRD","symbol":"/j"}
+{"call":"N8JRD","time":1790449704,"lat":42.4505,"lng":-83.65933,"speed":0.0,"course":4,"ssid":"N8JRD-1","alt":299.0,"path":"qAR,N8JRD","comment":"147.040MHz C110 +060 Jim D - FTM500D","symbol":"/k"}
