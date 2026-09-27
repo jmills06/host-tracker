@@ -1029,3 +1029,4 @@
 {"call":"W8KNX","time":1790541450,"lat":42.58667,"lng":-83.9805,"speed":0.0,"course":157,"ssid":"W8KNX-9","alt":323.0,"path":"WIDE1-1,WIDE2-2,qAR,CHLSEA","symbol":"/j"}
 {"call":"N8JRD","time":1790542481,"lat":42.4915,"lng":-83.47617,"speed":11.1,"course":180,"ssid":"N8JRD-3","alt":277.0,"path":"WIDE1-1,qAR,AE8SP-10","comment":"147.040MHz C110 +060 Jim D - MachE EV","symbol":"/v"}
 {"call":"N8JRD","time":1790542643,"lat":42.48167,"lng":-83.47917,"speed":33.3,"course":280,"ssid":"N8JRD-3","alt":274.0,"path":"WIXOM,WIDE1*,WIDE2-1,qAR,AE8SP-10","comment":"147.040MHz C110 +060 Jim D - MachE EV","symbol":"/v"}
+{"call":"N8JRD","time":1790542822,"lat":42.48967,"lng":-83.515,"speed":0.0,"course":298,"ssid":"N8JRD-3","alt":291.0,"path":"WIDE1-1,WIDE2-1,qAR,N8HKU-5","comment":"147.040MHz C110 +060 Jim D - MachE EV","symbol":"/v"}
