@@ -990,3 +990,4 @@
 {"call":"W8KNX","time":1790528103,"lat":42.53467,"lng":-83.75783,"speed":18.5,"course":25,"ssid":"W8KNX-9","alt":294.0,"path":"WIDE1-1,qAR,W8MCV-10","symbol":"/j"}
 {"call":"W8KNX","time":1790528404,"lat":42.53467,"lng":-83.7575,"speed":0.0,"course":335,"ssid":"W8KNX-9","alt":297.0,"path":"qAR,W8MCV-10","symbol":"/j"}
 {"call":"W8KNX","time":1790529006,"lat":42.53467,"lng":-83.7575,"speed":0.0,"course":10,"ssid":"W8KNX-9","alt":298.0,"path":"WIDE1-1,WIDE2-2,qAR,W8MCV-10","symbol":"/j"}
+{"call":"N8JRD","time":1790529530,"lat":42.44667,"lng":-83.65033,"speed":16.7,"course":178,"ssid":"N8JRD-3","alt":268.0,"path":"WIDE1-1,WIDE2-1,qAR,N8JRD","comment":"147.040MHz C110 +060 Jim D - MachE EV","symbol":"/v"}
