@@ -1091,3 +1091,4 @@
 {"call":"N8JRD","time":1790722096,"lat":42.45033,"lng":-83.65967,"speed":0.0,"course":326,"ssid":"N8JRD-1","alt":288.0,"path":"WIDE1-1,qAR,N8QYQ-1","comment":"147.040MHz C110 +060 Jim D - FTM500D","symbol":"/k"}
 {"call":"K8JKU","time":1790722382,"lat":42.64333,"lng":-83.44367,"speed":0.0,"course":217,"ssid":"K8JKU-9","alt":296.0,"path":"WIDE1-1,WIDE2-1,qAR,KD8TBD-10","comment":"everydayham.com","symbol":"/j"}
 {"call":"K8JKU","time":1790723102,"lat":42.64333,"lng":-83.44367,"speed":0.0,"course":217,"ssid":"K8JKU-9","alt":296.0,"path":"WIDE1-1,WIDE2-1,qAR,KD8TBD-10","comment":"everydayham.com","symbol":"/j"}
+{"call":"K8JKU","time":1790723164,"lat":42.64333,"lng":-83.44367,"speed":9.3,"course":331,"ssid":"K8JKU-9","alt":294.0,"path":"WIDE1-1,WIDE2-1,qAR,KD8TBD-10","comment":"everydayham.com","symbol":"/j"}
