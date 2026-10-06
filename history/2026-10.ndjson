@@ -150,3 +150,4 @@
 {"call":"W8KNX","time":1791226805,"lat":42.47367,"lng":-83.6535,"speed":0.0,"course":157,"ssid":"W8KNX-9","alt":292.0,"path":"WIDE1-1,WIDE2-2,qAR,N8JRD","symbol":"/j"}
 {"call":"W8KNX","time":1791227105,"lat":42.47367,"lng":-83.65333,"speed":0.0,"course":337,"ssid":"W8KNX-9","alt":293.0,"path":"WIDE1-1,WIDE2-2,qAR,N8JRD","symbol":"/j"}
 {"call":"W8KNX","time":1791227286,"lat":42.47367,"lng":-83.6535,"speed":1.9,"course":317,"ssid":"W8KNX-9","alt":303.0,"path":"qAR,N8JRD","symbol":"/j"}
+{"call":"W8KNX","time":1791283961,"lat":42.51517,"lng":-83.65533,"speed":16.7,"course":42,"ssid":"W8KNX-9","alt":297.0,"path":"WIDE1-1,WIDE2-2,qAR,N8JRD","symbol":"/j"}
