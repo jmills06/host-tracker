@@ -230,3 +230,4 @@
 {"call":"K8JKU","time":1791574185,"lat":35.76217,"lng":-105.82217,"speed":0.0,"course":196,"ssid":"K8JKU-7","path":"TESQUE*,WIDE2-1,qAR,K9POL-1","comment":"everydayham.com","symbol":"/["}
 {"call":"W8KNX","time":1791574207,"lat":42.672,"lng":-83.76,"speed":5.6,"course":7,"ssid":"W8KNX-9","alt":293.0,"path":"WIDE1-1,qAR,W8MCV-10","symbol":"/j"}
 {"call":"W8KNX","time":1791574478,"lat":42.676,"lng":-83.76133,"speed":3.7,"course":332,"ssid":"W8KNX-9","alt":303.0,"path":"WIDE1-1,qAR,CHLSEA","symbol":"/j"}
+{"call":"W8KNX","time":1791574556,"lat":42.67683,"lng":-83.76183,"speed":33.3,"course":10,"ssid":"W8KNX-9","alt":303.0,"path":"WIDE1-1,WIDE2-2,qAR,CHLSEA","symbol":"/j"}
