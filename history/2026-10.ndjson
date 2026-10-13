@@ -441,3 +441,4 @@
 {"call":"N8JRD","time":1791891594,"lat":42.57467,"lng":-83.85167,"speed":98.2,"course":311,"ssid":"N8JRD-3","alt":292.0,"path":"qAR,CHLSEA","comment":"145.150MHz C100 -060 Jim D - MachE EV","symbol":"/v"}
 {"call":"W8KNX","time":1791891737,"lat":42.53467,"lng":-83.75783,"speed":0.0,"course":19,"ssid":"W8KNX-9","alt":315.0,"path":"WIDE1-1,qAR,CHLSEA","symbol":"/j"}
 {"call":"N8JRD","time":1791891896,"lat":42.60067,"lng":-83.947,"speed":111.1,"course":316,"ssid":"N8JRD-3","alt":279.0,"path":"WIDE1-1,WIDE2-1,qAR,CHLSEA","comment":"444.800MHz T110 +500 Jim D - MachE EV","symbol":"/v"}
+{"call":"N8JRD","time":1791892196,"lat":42.64367,"lng":-84.04383,"speed":114.8,"course":296,"ssid":"N8JRD-3","alt":277.0,"path":"qAR,CHLSEA","comment":"145.150MHz C100 -060 Jim D - MachE EV","symbol":"/v"}
