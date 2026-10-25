@@ -803,3 +803,4 @@
 {"call":"W8KNX","time":1792938103,"lat":41.7505,"lng":-87.865,"speed":133.3,"course":122,"ssid":"W8KNX-9","alt":225.0,"path":"qAO,WA9SGF-2","symbol":"/j"}
 {"call":"W8KNX","time":1792938404,"lat":41.68483,"lng":-87.7805,"speed":131.5,"course":160,"ssid":"W8KNX-9","alt":188.0,"path":"WIDE1-1,qAR,KC0AHK","symbol":"/j"}
 {"call":"W8KNX","time":1792939007,"lat":41.57933,"lng":-87.60817,"speed":133.3,"course":90,"ssid":"W8KNX-9","alt":187.0,"path":"KC9ZMY-2*,WIDE2-2,qAR,KC9SIZ-2","symbol":"/j"}
+{"call":"W8KNX","time":1792939308,"lat":41.57417,"lng":-87.47883,"speed":131.5,"course":89,"ssid":"W8KNX-9","alt":200.0,"path":"qAR,K9KJ-1","symbol":"/j"}
