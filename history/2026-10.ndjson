@@ -925,3 +925,4 @@
 {"call":"N8JRD","time":1793395416,"lat":42.44467,"lng":-83.65017,"speed":13.0,"course":6,"ssid":"N8JRD-1","alt":278.0,"path":"WIDE1-1,WIDE2-1,qAR,N8JRD","comment":"147.040MHz C110 +060 Jim D - FTM500D","symbol":"/k"}
 {"call":"W8KNX","time":1793404378,"lat":42.521,"lng":-83.75917,"speed":20.4,"course":176,"ssid":"W8KNX-9","alt":286.0,"path":"WIDE1-1,WIDE2-2,qAR,N8JRD","symbol":"/j"}
 {"call":"W8KNX","time":1793404679,"lat":42.51217,"lng":-83.68967,"speed":85.2,"course":180,"ssid":"W8KNX-9","alt":287.0,"path":"qAR,N8JRD","symbol":"/j"}
+{"call":"W8KNX","time":1793405012,"lat":42.50083,"lng":-83.65383,"speed":68.5,"course":177,"ssid":"W8KNX-9","alt":293.0,"path":"qAR,N8JRD","symbol":"/j"}
