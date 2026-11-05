@@ -57,3 +57,4 @@
 {"call":"W8KNX","time":1793745863,"lat":36.10917,"lng":-115.16833,"speed":0.0,"course":0,"ssid":"W8KNX-3","alt":0.0,"path":"VEGAS,WIDE1*,WIDE2-2,qAR,W7HEN-3","comment":"448.400MHz T141 -500","symbol":"/["}
 {"call":"W8KNX","time":1793849169,"lat":42.19417,"lng":-83.38233,"speed":0.0,"course":239,"ssid":"W8KNX-9","alt":188.0,"path":"WIDE1-1,WIDE2-2,qAR,CHLSEA","symbol":"/j"}
 {"call":"W8KNX","time":1793849502,"lat":42.25983,"lng":-83.44033,"speed":120.4,"course":358,"ssid":"W8KNX-9","alt":298.0,"path":"WIDE1-1,qAR,N8HKU-5","symbol":"/j"}
+{"call":"W8KNX","time":1793849803,"lat":42.35017,"lng":-83.43783,"speed":120.4,"course":17,"ssid":"W8KNX-9","alt":260.0,"path":"qAR,N8QYQ-1","symbol":"/j"}
