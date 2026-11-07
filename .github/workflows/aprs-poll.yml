@@ -40,7 +40,13 @@ jobs:
           # keep our freshly generated file, then always rebuild the commit
           # on top of the very latest main so a moving remote can't reject us
           cp host-tracker.json /tmp/host-tracker.json
-          for i in 1 2 3 4 5; do
+          # Two kinds of rejection end up here: a race with another runner
+          # (fixed by re-syncing) and GitHub itself answering 500 Internal
+          # Server Error for a short spell (fixed only by waiting). Back off
+          # exponentially, 2+4+8+16+32+60 s, so a brief GitHub blip has about
+          # two minutes to clear instead of the ten seconds it used to get.
+          delays=(2 4 8 16 32 60)
+          for i in 1 2 3 4 5 6 7; do
             git fetch origin main
             git reset --hard origin/main
 
@@ -64,8 +70,10 @@ jobs:
             if git push origin HEAD:main; then
               echo "pushed"; exit 0
             fi
-            echo "push rejected (attempt $i), re-syncing and retrying"
-            sleep 2
+            if (( i > ${#delays[@]} )); then break; fi
+            wait=${delays[$((i-1))]}
+            echo "push rejected (attempt $i), re-syncing and retrying in ${wait}s"
+            sleep "$wait"
           done
-          echo "push failed after retries" >&2
+          echo "::error::push failed after $i attempts; GitHub may be having an outage (check githubstatus.com)" >&2
           exit 1
