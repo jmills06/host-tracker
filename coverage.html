@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Everyday Ham - Grids &amp; Coverage</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@300;400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<style>
+  /* ============================================================
+     THE EVERYDAY HAM - GRIDS & COVERAGE
+     An interactive page over the whole position archive (history/),
+     separate from the 72-hour signage board in host-tracker.html.
+
+       Grid squares  every Maidenhead square each host has beaconed
+                     from, or driven through between beacons.
+       Coverage      who heard each beacon: straight into an igate,
+                     or relayed by digipeaters first. Relay locations
+                     come from history/stations.json, which the poller
+                     fills in from aprs.fi a few at a time.
+     ============================================================ */
+  :root {
+    --navy:       #152333;
+    --navy-dark:  #0d1620;
+    --navy-light: #1e3347;
+    --orange:     #ff7030;
+    --cream:      #fdf8e5;
+    --cream-80:   rgba(253, 248, 229, 0.80);
+    --cream-50:   rgba(253, 248, 229, 0.50);
+    --cream-30:   rgba(253, 248, 229, 0.30);
+    --line:       rgba(255, 255, 255, 0.10);
+    --direct:     #1fa85a;
+    --digi:       #0b8fc7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background:
+      radial-gradient(1200px 700px at 12% -8%, rgba(255,112,48,0.10), transparent 60%),
+      linear-gradient(160deg, var(--navy-light) 0%, var(--navy) 42%, var(--navy-dark) 100%);
+    color: var(--cream);
+    font-family: 'Source Sans Pro', sans-serif;
+    display: flex; flex-direction: column;
+  }
+
+  header {
+    padding: 18px 24px 12px;
+    display: flex; flex-wrap: wrap; gap: 14px 28px;
+    align-items: flex-end; justify-content: space-between;
+  }
+  .kicker {
+    font-family: 'Oswald', sans-serif; font-weight: 600;
+    letter-spacing: 5px; font-size: 14px; color: var(--orange); text-transform: uppercase;
+  }
+  .title {
+    font-family: 'Oswald', sans-serif; font-weight: 300;
+    font-size: 36px; line-height: 1; margin-top: 4px;
+  }
+  .title b { font-weight: 600; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .seg button, .chip {
+    font: 600 14px 'Source Sans Pro', sans-serif; letter-spacing: 0.5px;
+    color: var(--cream-80); background: transparent; border: 0; cursor: pointer;
+    padding: 7px 14px;
+  }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--orange); color: var(--navy-dark); }
+  .chip {
+    border: 1px solid var(--line); border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .chip i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .chip.off { opacity: 0.4; }
+  .chips { display: inline-flex; gap: 6px; }
+  select {
+    font: 600 14px 'Source Sans Pro', sans-serif; color: var(--cream);
+    background: var(--navy-dark); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px;
+  }
+  .rule {
+    height: 2px; margin: 0 24px;
+    background: linear-gradient(90deg, var(--orange) 0%, rgba(255,112,48,0.35) 30%, rgba(255,112,48,0) 88%);
+  }
+
+  main { flex: 1 1 auto; min-height: 0; display: flex; gap: 16px; padding: 16px 24px 20px; }
+  #mapwrap {
+    position: relative; flex: 1 1 auto; min-height: 420px;
+    border-radius: 14px; overflow: hidden; border: 1px solid var(--line);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  }
+  #map { position: absolute; inset: 0; background: #e9eef2; }
+  aside {
+    flex: 0 0 340px; overflow-y: auto;
+    background: rgba(13,22,32,0.55); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px;
+  }
+  aside h3 {
+    font: 500 13px 'Oswald', sans-serif; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--orange); margin: 18px 0 8px;
+  }
+  aside h3:first-child { margin-top: 0; }
+  .note { font-size: 13px; color: var(--cream-50); line-height: 1.4; margin-top: 6px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+  .stat { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 8px 10px; border-left: 3px solid var(--cream-30); }
+  .stat .v { font: 500 26px 'Oswald', sans-serif; line-height: 1.1; }
+  .stat .k { font-size: 12px; color: var(--cream-50); text-transform: uppercase; letter-spacing: 0.6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 5px 4px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
+  td.r { text-align: right; white-space: nowrap; color: var(--cream-80); }
+  td.m { font-family: 'Oswald', sans-serif; letter-spacing: 0.5px; }
+  tr.go { cursor: pointer; }
+  tr.go:hover td { background: rgba(255,112,48,0.10); }
+  .dim { color: var(--cream-50); font-size: 12px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: 0; }
+  .bar { height: 8px; border-radius: 4px; overflow: hidden; display: flex; background: rgba(255,255,255,0.08); margin-top: 6px; }
+
+  .legend {
+    position: absolute; left: 12px; bottom: 26px; z-index: 500;
+    background: rgba(13,22,32,0.85); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 12px; font-size: 13px; color: var(--cream-80); line-height: 1.7;
+  }
+  .legend .sw { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
+  #status {
+    position: absolute; inset: 0; z-index: 600; display: none;
+    align-items: center; justify-content: center; text-align: center; padding: 30px;
+    background: rgba(13,22,32,0.85); font-size: 17px; line-height: 1.5;
+  }
+  #status.show { display: flex; }
+  #status code { color: var(--orange); }
+
+  .gridlabel {
+    font: 600 12px 'Oswald', sans-serif; letter-spacing: 1px; color: #152333;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff; white-space: nowrap; pointer-events: none;
+    transform: translate(-50%, -50%);
+  }
+  .leaflet-popup-content { font: 14px 'Source Sans Pro', sans-serif; line-height: 1.45; margin: 10px 14px; }
+  .leaflet-popup-content b.big { font: 600 18px 'Oswald', sans-serif; letter-spacing: 1px; }
+  .leaflet-popup-content code { font-size: 12px; word-break: break-all; }
+
+  @media (max-width: 900px) {
+    main { flex-direction: column; }
+    aside { flex: 0 0 auto; }
+    #mapwrap { min-height: 60vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="kicker">The Everyday Ham</div>
+    <div class="title">Grids &amp; <b>Coverage</b></div>
+  </div>
+  <div class="controls">
+    <div class="seg" id="modeSeg">
+      <button data-mode="grids">Grid squares</button>
+      <button data-mode="coverage">Coverage</button>
+    </div>
+    <div class="chips" id="hostChips"></div>
+    <select id="range" title="Time range"></select>
+    <div class="seg" id="precSeg" title="Grid precision">
+      <button data-prec="4">4-char</button>
+      <button data-prec="6">6-char</button>
+    </div>
+    <div class="seg" id="lineSeg" title="Lines from each beacon to whoever heard it">
+      <button data-lines="1">Relay lines</button>
+      <button data-lines="0">Dots only</button>
+    </div>
+  </div>
+</header>
+<div class="rule"></div>
+
+<main>
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div class="legend" id="legend"></div>
+    <div id="status"></div>
+  </div>
+  <aside id="side"></aside>
+</main>
+
+<script>
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const ARCHIVE = 'history/';
+
+// Same roster and colours as host-tracker.html.
+const HOSTS = [
+  { call: 'K8JKU', name: 'James', color: '#0B6BCB' },
+  { call: 'N8JRD', name: 'Jim',   color: '#C1121F' },
+  { call: 'W8KNX', name: 'Rory',  color: '#8E24AA' },
+];
+const SHARED_COLOR = '#ff7030';   // a square more than one host has been in
+
+const KM_TO_MI = 0.621371;
+const SPEED_SANITY_KMH = 200;     // implied speed above this = bad decode, do not interpolate
+
+// Between two beacons this close together the radio was on and the car was
+// driving, so the squares on the straight line between them were crossed too.
+// Past this the gap means "radio off" and nothing is inferred.
+const INTERP_MAX_GAP_S = 30 * 60;
+
+// Keyless basemap with muted colours, so the squares and lines carry.
+const BASEMAP = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const LABELS  = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}';
+const ATTRIB  = 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors';
+
+const HOME = [42.6, -83.6];
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {
+  mode: 'grids', prec: 4, lines: true, range: 'all',
+  hosts: new Set(HOSTS.map(h => h.call)),
+};
+let records = [];          // every beacon, sorted by time
+let stations = {};         // relay call -> {lat, lng} | {missing}
+let months = [];
+let map, layer, labelLayer, graticule;
+const HOST = Object.fromEntries(HOSTS.map(h => [h.call, h]));
+
+/* ============================================================
+   GEO
+   ============================================================ */
+function haversineKm(a, b) {
+  const R = 6371, rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat/2)**2 + Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// Maidenhead locator, 4 or 6 characters.
+function gridOf(lat, lng, prec) {
+  const lon = lng + 180, la = lat + 90;
+  const F = 'ABCDEFGHIJKLMNOPQR', S = 'abcdefghijklmnopqrstuvwx';
+  let g = F[Math.floor(lon / 20)] + F[Math.floor(la / 10)] +
+          Math.floor((lon % 20) / 2) + Math.floor(la % 10);
+  if (prec === 6) g += S[Math.floor((lon % 2) * 12)] + S[Math.floor((la % 1) * 24)];
+  return g;
+}
+
+// South-west corner and size of a locator, as Leaflet bounds.
+function gridBounds(g) {
+  let lng = (g.charCodeAt(0) - 65) * 20 - 180 + (+g[2]) * 2;
+  let lat = (g.charCodeAt(1) - 65) * 10 - 90 + (+g[3]);
+  let w = 2, h = 1;
+  if (g.length >= 6) {
+    w = 2 / 24; h = 1 / 24;
+    lng += (g.charCodeAt(4) - 97) * w;
+    lat += (g.charCodeAt(5) - 97) * h;
+  }
+  return [[lat, lng], [lat + h, lng + w]];
+}
+
+/* ============================================================
+   APRS PATH
+   Keep in step with parse_path() in aprs_poller.py.
+   Everything up to the last '*' was actually used; the igate is
+   whatever follows the q construct.
+   ============================================================ */
+const ALIAS_RE = /^(WIDE|TRACE|RELAY|TEMP|ECHO|GATE|RFONLY|NOGATE)\d*(-\d+)?$/;
+function parsePath(path) {
+  const parts = (path || '').split(',').map(s => s.trim()).filter(Boolean);
+  const qi = parts.findIndex(p => p.startsWith('qA'));
+  const pre = qi < 0 ? parts : parts.slice(0, qi);
+  const igate = qi >= 0 && qi < parts.length - 1 ? parts[qi + 1].toUpperCase() : null;
+  let last = -1;
+  pre.forEach((p, i) => { if (p.endsWith('*')) last = i; });
+  const digis = [];
+  for (const p of pre.slice(0, last + 1)) {
+    const c = p.replace(/\*$/, '').toUpperCase();
+    if (c && !ALIAS_RE.test(c) && !digis.includes(c)) digis.push(c);
+  }
+  // Used a WIDEn hop but the digi left no name behind.
+  const anonHop = last >= 0 && digis.length === 0;
+  return { digis, igate, q: qi >= 0 ? parts[qi] : null, viaDigi: last >= 0, anonHop };
+}
+
+function stationAt(call) {
+  const s = stations[call];
+  return s && !s.missing && s.lat != null ? { lat: s.lat, lng: s.lng } : null;
+}
+
+/* ============================================================
+   FORMAT
+   ============================================================ */
+const fmtDate = t => new Date(t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+const fmtWhen = t => new Date(t * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const mi = km => Math.round(km * KM_TO_MI).toLocaleString();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const hostDot = c => `<span class="dot" style="background:${HOST[c].color}"></span>`;
+
+/* ============================================================
+   LOAD
+   ============================================================ */
+async function loadArchive() {
+  const idx = await (await fetch(ARCHIVE + 'index.json', { cache: 'no-store' })).json();
+  months = idx.months.map(m => m.month);
+  const texts = await Promise.all(months.map(m =>
+    fetch(ARCHIVE + m + '.ndjson', { cache: 'no-store' }).then(r => r.ok ? r.text() : '')));
+  const out = [];
+  for (const t of texts) for (const line of t.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const r = JSON.parse(line);
+      if (HOST[r.call] && isFinite(r.lat) && isFinite(r.lng)) out.push(r);
+    } catch (e) { /* half-written line: skip it */ }
+  }
+  out.sort((a, b) => a.time - b.time);
+  records = out;
+  try {
+    const s = await fetch(ARCHIVE + 'stations.json', { cache: 'no-store' });
+    if (s.ok) stations = (await s.json()).stations || {};
+  } catch (e) { stations = {}; }
+}
+
+function selected() {
+  let lo = -Infinity, hi = Infinity;
+  if (state.range !== 'all') {
+    const [y, m] = state.range.split('-').map(Number);
+    lo = Date.UTC(y, m - 1, 1) / 1000;
+    hi = Date.UTC(y, m, 1) / 1000;
+  }
+  return records.filter(r => state.hosts.has(r.call) && r.time >= lo && r.time < hi);
+}
+
+/* ============================================================
+   GRID SQUARES
+   ============================================================ */
+function buildGrids(recs, prec) {
+  const cells = new Map();
+  const cell = g => {
+    let c = cells.get(g);
+    if (!c) cells.set(g, c = { grid: g, hosts: {}, beacons: 0 });
+    return c;
+  };
+  const touch = (g, call, t, beacon) => {
+    const c = cell(g);
+    const h = c.hosts[call] || (c.hosts[call] = { first: t, last: t, beacons: 0 });
+    h.first = Math.min(h.first, t); h.last = Math.max(h.last, t);
+    if (beacon) { h.beacons++; c.beacons++; }
+  };
+
+  const byHost = {};
+  for (const r of recs) (byHost[r.call] = byHost[r.call] || []).push(r);
+  const stepKm = prec === 6 ? 1 : 5;
+
+  for (const [call, pts] of Object.entries(byHost)) {
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      touch(gridOf(p.lat, p.lng, prec), call, p.time, true);
+      const q = pts[i + 1];
+      if (!q) continue;
+      const dt = q.time - p.time;
+      if (dt <= 0 || dt > INTERP_MAX_GAP_S) continue;
+      const km = haversineKm(p, q);
+      if (km / (dt / 3600) > SPEED_SANITY_KMH) continue;
+      const n = Math.floor(km / stepKm);
+      for (let k = 1; k <= n; k++) {
+        const f = k / (n + 1);
+        touch(gridOf(p.lat + (q.lat - p.lat) * f, p.lng + (q.lng - p.lng) * f, prec),
+              call, Math.round(p.time + dt * f), false);
+      }
+    }
+  }
+  return [...cells.values()];
+}
+
+function drawGrids() {
+  const recs = selected();
+  const cells = buildGrids(recs, state.prec);
+  const maxB = Math.max(1, ...cells.map(c => c.beacons));
+
+  for (const c of cells) {
+    const calls = Object.keys(c.hosts);
+    const color = calls.length > 1 ? SHARED_COLOR : HOST[calls[0]].color;
+    const crossedOnly = c.beacons === 0;
+    const shade = crossedOnly ? 0.10 : 0.22 + 0.45 * Math.log(1 + c.beacons) / Math.log(1 + maxB);
+    const rect = L.rectangle(gridBounds(c.grid), {
+      color, weight: crossedOnly ? 1 : 1.5, opacity: 0.9,
+      dashArray: crossedOnly ? '4 4' : null, fillColor: color, fillOpacity: shade,
+    });
+    rect.bindPopup(() => gridPopup(c));
+    rect.addTo(layer);
+    c.center = rect.getBounds().getCenter();
+  }
+  state.cells = cells;
+  updateLabels();
+  sideGrids(cells, recs);
+  legendGrids();
+  fitTo(cells.map(c => gridBounds(c.grid)).flat());
+}
+
+function gridPopup(c) {
+  const rows = Object.entries(c.hosts)
+    .sort((a, b) => a[1].first - b[1].first)
+    .map(([call, h]) => `${hostDot(call)}<b>${HOST[call].name}</b> ` +
+      (h.beacons ? `${h.beacons} beacon${h.beacons > 1 ? 's' : ''}, first ${fmtDate(h.first)}`
+                 : `drove through ${fmtDate(h.first)} <span class="dim">(between beacons)</span>`))
+    .join('<br>');
+  return `<b class="big">${c.grid}</b><br>${rows}`;
+}
+
+function updateLabels() {
+  labelLayer.clearLayers();
+  if (state.mode !== 'grids' || !state.cells) return;
+  const z = map.getZoom();
+  if (state.prec === 4 ? z < 6 : z < 11) return;
+  const view = map.getBounds().pad(0.2);
+  for (const c of state.cells) {
+    if (!view.contains(c.center)) continue;
+    L.marker(c.center, {
+      interactive: false,
+      icon: L.divIcon({ className: '', html: `<div class="gridlabel">${c.grid}</div>`, iconSize: [0, 0] }),
+    }).addTo(labelLayer);
+  }
+}
+
+// Faint Maidenhead square lines for context, when zoomed to where they read.
+function updateGraticule() {
+  graticule.clearLayers();
+  if (state.mode !== 'grids') return;
+  const z = map.getZoom();
+  const prec = z >= 10 ? 6 : z >= 5 ? 4 : 0;
+  if (!prec) return;
+  const w = prec === 6 ? 2 / 24 : 2, h = prec === 6 ? 1 / 24 : 1;
+  const b = map.getBounds();
+  const x0 = Math.floor((b.getWest() + 180) / w) * w - 180, y0 = Math.floor((b.getSouth() + 90) / h) * h - 90;
+  if ((b.getEast() - x0) / w > 80 || (b.getNorth() - y0) / h > 80) return;
+  const style = { color: '#152333', weight: 1, opacity: 0.18, interactive: false };
+  for (let x = x0; x <= b.getEast(); x += w) L.polyline([[b.getSouth(), x], [b.getNorth(), x]], style).addTo(graticule);
+  for (let y = y0; y <= b.getNorth(); y += h) L.polyline([[y, b.getWest()], [y, b.getEast()]], style).addTo(graticule);
+}
+
+function sideGrids(cells, recs) {
+  const per = {};
+  for (const c of cells) for (const [call, h] of Object.entries(c.hosts)) {
+    const p = per[call] || (per[call] = { all: 0, beaconed: 0 });
+    p.all++; if (h.beacons) p.beaconed++;
+  }
+  const label = state.prec === 4 ? 'grid squares' : 'subsquares';
+  let html = `<h3>${state.prec === 4 ? 'Grids' : 'Subsquares'} activated</h3><div class="stats">`;
+  html += `<div class="stat" style="border-left-color:${SHARED_COLOR}"><div class="v">${cells.length}</div><div class="k">Together</div></div>`;
+  for (const h of HOSTS) if (state.hosts.has(h.call)) {
+    const p = per[h.call] || { all: 0, beaconed: 0 };
+    html += `<div class="stat" style="border-left-color:${h.color}"><div class="v">${p.all}</div><div class="k">${h.name}</div></div>`;
+  }
+  html += `</div><div class="note">Counts every ${label.slice(0, -1)} a host beaconed from or drove through between beacons
+           (dashed outline). Gaps over ${INTERP_MAX_GAP_S / 60} minutes count as radio off, so nothing is filled in across them.</div>`;
+
+  const newest = cells.map(c => {
+    const [call, h] = Object.entries(c.hosts).sort((a, b) => a[1].first - b[1].first)[0];
+    return { c, call, first: h.first };
+  }).sort((a, b) => b.first - a.first).slice(0, 8);
+  html += `<h3>Newest</h3><table>` + newest.map(n =>
+    `<tr class="go" data-grid="${n.c.grid}"><td class="m">${n.c.grid}</td><td>${hostDot(n.call)}${HOST[n.call].name}</td><td class="r">${fmtDate(n.first)}</td></tr>`).join('') + `</table>`;
+
+  const most = cells.filter(c => c.beacons).sort((a, b) => b.beacons - a.beacons).slice(0, 6);
+  html += `<h3>Most beacons</h3><table>` + most.map(c =>
+    `<tr class="go" data-grid="${c.grid}"><td class="m">${c.grid}</td><td>${Object.keys(c.hosts).map(hostDot).join('')}</td><td class="r">${c.beacons}</td></tr>`).join('') + `</table>`;
+
+  const shared = cells.filter(c => Object.keys(c.hosts).length > 1).length;
+  html += `<div class="note" style="margin-top:14px">${recs.length.toLocaleString()} beacons in range.
+           ${shared} ${label} visited by more than one host.</div>`;
+  side(html, row => {
+    const c = cells.find(x => x.grid === row.dataset.grid);
+    if (c) map.flyToBounds(gridBounds(c.grid), { maxZoom: state.prec === 4 ? 8 : 13, padding: [60, 60] });
+  });
+}
+
+function legendGrids() {
+  const hs = HOSTS.filter(h => state.hosts.has(h.call));
+  document.getElementById('legend').innerHTML =
+    hs.map(h => `<span class="sw" style="background:${h.color}"></span>${h.name}`).join('<br>') +
+    (hs.length > 1 ? `<br><span class="sw" style="background:${SHARED_COLOR}"></span>Shared` : '') +
+    `<br><span class="sw" style="border:1px dashed #fdf8e5"></span>Drove through`;
+}
+
+/* ============================================================
+   COVERAGE
+   ============================================================ */
+function drawCoverage() {
+  const recs = selected();
+  const withPath = recs.filter(r => r.path);
+  const relays = new Map();   // call -> {call, roles:Set, packets, best:{km, rec}}
+  const hops = [];            // {rec, call, km} for the first RF receiver
+  let direct = 0, viaDigi = 0;
+
+  const relay = call => {
+    let s = relays.get(call);
+    if (!s) relays.set(call, s = { call, roles: new Set(), packets: 0, best: null });
+    return s;
+  };
+
+  for (const r of withPath) {
+    const p = parsePath(r.path);
+    if (p.viaDigi) viaDigi++; else direct++;
+    const hex = p.viaDigi ? '#0b8fc7' : '#1fa85a';
+
+    p.digis.forEach(d => { const s = relay(d); s.roles.add('digi'); s.packets++; });
+    if (p.igate) { const s = relay(p.igate); s.roles.add('igate'); s.packets++; }
+
+    // The first station to hear the beacon over the air. With an unnamed
+    // WIDE hop we do not know who that was, so no distance is claimed.
+    const first = p.digis[0] || (p.anonHop ? null : p.igate);
+    const firstAt = first && stationAt(first);
+    if (firstAt) {
+      const km = haversineKm(r, firstAt);
+      hops.push({ rec: r, call: first, km });
+      const s = relay(first);
+      if (!s.best || km > s.best.km) s.best = { km, rec: r };
+    }
+
+    if (state.lines) {
+      const chain = [[r.lat, r.lng]];
+      for (const c of [...p.digis, p.igate]) { const at = c && stationAt(c); if (at) chain.push([at.lat, at.lng]); }
+      if (chain.length > 1) L.polyline(chain, { color: hex, weight: 1.2, opacity: 0.5, interactive: false }).addTo(layer);
+    }
+    L.circleMarker([r.lat, r.lng], {
+      radius: 4, color: '#0d1620', weight: 1, fillColor: hex, fillOpacity: 0.9,
+    }).bindPopup(() => beaconPopup(r, p, first, firstAt)).addTo(layer);
+  }
+
+  for (const s of relays.values()) {
+    const at = stationAt(s.call);
+    if (!at) continue;
+    const isIgate = s.roles.has('igate');
+    L.circleMarker([at.lat, at.lng], {
+      radius: 5 + Math.min(14, Math.sqrt(s.packets) * 1.4),
+      color: isIgate ? '#ff7030' : '#0b8fc7', weight: 3,
+      fillColor: '#fdf8e5', fillOpacity: 0.85,
+    }).bindPopup(() => relayPopup(s)).addTo(layer);
+  }
+
+  state.relays = relays;
+  sideCoverage(recs, withPath, direct, viaDigi, relays, hops);
+  legendCoverage();
+  fitTo(withPath.map(r => [r.lat, r.lng]));
+}
+
+function beaconPopup(r, p, first, firstAt) {
+  const kmh = r.speed || 0;
+  let s = `${hostDot(r.call)}<b>${HOST[r.call].name}</b> <span class="dim">${esc(r.ssid || r.call)}</span><br>` +
+          `${fmtWhen(r.time)}${kmh > 1 ? `, ${Math.round(kmh * KM_TO_MI)} mph` : ''}<br>`;
+  s += p.viaDigi ? `Relayed by <b>${p.digis.length ? p.digis.map(esc).join(' &rarr; ') : 'an unnamed digi'}</b>`
+                 : `Heard direct`;
+  if (p.igate) s += `, gated by <b>${esc(p.igate)}</b>`;
+  if (firstAt) s += `<br>First hop ${mi(haversineKm(r, firstAt))} mi to ${esc(first)}`;
+  else if (first) s += `<br><span class="dim">${esc(first)} not located yet</span>`;
+  return s + `<br><code>${esc(r.path)}</code>`;
+}
+
+function relayPopup(s) {
+  const roles = [...s.roles].sort().join(' + ');
+  let h = `<b class="big">${esc(s.call)}</b> <span class="dim">${roles}</span><br>` +
+          `Carried ${s.packets} of our beacons`;
+  if (s.best) h += `<br>Farthest catch: ${mi(s.best.km)} mi (${HOST[s.best.rec.call].name}, ${fmtDate(s.best.rec.time)})`;
+  return h + `<br><a href="https://aprs.fi/info/a/${encodeURIComponent(s.call)}" target="_blank" rel="noopener">aprs.fi &rarr;</a>`;
+}
+
+function sideCoverage(recs, withPath, direct, viaDigi, relays, hops) {
+  const n = withPath.length;
+  const located = [...relays.keys()].filter(c => stationAt(c)).length;
+  let html = `<h3>How we were heard</h3><div class="stats">
+    <div class="stat" style="border-left-color:var(--direct)"><div class="v">${n ? Math.round(100 * direct / n) : 0}%</div><div class="k">Direct to igate</div></div>
+    <div class="stat" style="border-left-color:var(--digi)"><div class="v">${n ? Math.round(100 * viaDigi / n) : 0}%</div><div class="k">Via digipeater</div></div>
+    <div class="stat"><div class="v">${relays.size}</div><div class="k">Relay stations</div></div>
+  </div>
+  <div class="bar"><div style="width:${n ? 100 * direct / n : 0}%;background:var(--direct)"></div><div style="flex:1;background:var(--digi)"></div></div>
+  <div class="note">${n.toLocaleString()} of ${recs.length.toLocaleString()} beacons in range carry a path.
+    Older ones were rebuilt from git history before the path was archived, so they cannot be placed here.</div>`;
+
+  const top = [...relays.values()].sort((a, b) => b.packets - a.packets).slice(0, 12);
+  html += `<h3>Top relays</h3><table>` + top.map(s => {
+    const role = s.roles.has('igate') ? (s.roles.has('digi') ? 'both' : 'igate') : 'digi';
+    const roleColor = role === 'digi' ? 'var(--digi)' : 'var(--orange)';
+    return `<tr class="go" data-call="${esc(s.call)}"><td class="m">${esc(s.call)}</td>
+      <td><span class="dim" style="color:${roleColor}">${role}</span></td>
+      <td class="r">${s.packets}</td>
+      <td class="r">${s.best ? mi(s.best.km) + ' mi' : stationAt(s.call) ? '' : '<span class="dim">?</span>'}</td></tr>`;
+  }).join('') + `</table><div class="note">Count is beacons carried; distance is the farthest first hop it caught.</div>`;
+
+  const dx = hops.sort((a, b) => b.km - a.km).slice(0, 6);
+  if (dx.length) html += `<h3>Longest first hops</h3><table>` + dx.map(d =>
+    `<tr class="go" data-lat="${d.rec.lat}" data-lng="${d.rec.lng}"><td>${hostDot(d.rec.call)}${HOST[d.rec.call].name}</td>
+      <td class="m">${esc(d.call)}</td><td class="r">${mi(d.km)} mi</td><td class="r dim">${fmtDate(d.rec.time)}</td></tr>`).join('') + `</table>`;
+
+  const missing = relays.size - located;
+  if (missing) html += `<div class="note" style="margin-top:14px">${missing} of ${relays.size} relays have no location yet.
+    The poller looks them up on aprs.fi a few at a time and saves them to history/stations.json;
+    some igates never beacon a position, so a few may stay unplaced.</div>`;
+
+  side(html, row => {
+    if (row.dataset.call) {
+      const at = stationAt(row.dataset.call);
+      if (at) map.flyTo([at.lat, at.lng], 10);
+    } else if (row.dataset.lat) {
+      map.flyTo([+row.dataset.lat, +row.dataset.lng], 10);
+    }
+  });
+}
+
+function legendCoverage() {
+  document.getElementById('legend').innerHTML =
+    `<span class="dot" style="background:var(--direct)"></span>Heard direct by an igate<br>` +
+    `<span class="dot" style="background:var(--digi)"></span>Relayed by a digipeater<br>` +
+    `<span class="dot" style="background:#fdf8e5;box-shadow:0 0 0 2px #ff7030"></span> Igate &nbsp;` +
+    `<span class="dot" style="background:#fdf8e5;box-shadow:0 0 0 2px #0b8fc7"></span> Digi`;
+}
+
+/* ============================================================
+   UI
+   ============================================================ */
+function side(html, onRow) {
+  const el = document.getElementById('side');
+  el.innerHTML = html;
+  el.querySelectorAll('tr.go').forEach(tr => tr.addEventListener('click', () => onRow(tr)));
+}
+
+let fitKey = '';
+function fitTo(latlngs) {
+  // Only refit when what is shown changes, not on every redraw.
+  const key = [state.mode, state.range, [...state.hosts].sort()].join('|');
+  if (key === fitKey) return;
+  fitKey = key;
+  if (latlngs.length) map.fitBounds(L.latLngBounds(latlngs), { padding: [30, 30], maxZoom: 9 });
+}
+
+function render() {
+  layer.clearLayers();
+  for (const b of document.querySelectorAll('#modeSeg button')) b.classList.toggle('on', b.dataset.mode === state.mode);
+  for (const b of document.querySelectorAll('#precSeg button')) b.classList.toggle('on', +b.dataset.prec === state.prec);
+  for (const b of document.querySelectorAll('#lineSeg button')) b.classList.toggle('on', !!+b.dataset.lines === state.lines);
+  for (const c of document.querySelectorAll('#hostChips .chip')) c.classList.toggle('off', !state.hosts.has(c.dataset.call));
+  document.getElementById('precSeg').style.display = state.mode === 'grids' ? '' : 'none';
+  document.getElementById('lineSeg').style.display = state.mode === 'coverage' ? '' : 'none';
+  if (state.mode === 'grids') drawGrids(); else { state.cells = null; drawCoverage(); }
+  updateLabels();
+  updateGraticule();
+  history.replaceState(null, '', '#' + state.mode);
+}
+
+function buildControls() {
+  document.getElementById('hostChips').innerHTML = HOSTS.map(h =>
+    `<button class="chip" data-call="${h.call}"><i style="background:${h.color}"></i>${h.name}</button>`).join('');
+  document.querySelectorAll('#hostChips .chip').forEach(c => c.addEventListener('click', () => {
+    const call = c.dataset.call;
+    if (state.hosts.has(call)) { if (state.hosts.size > 1) state.hosts.delete(call); }
+    else state.hosts.add(call);
+    render();
+  }));
+  const sel = document.getElementById('range');
+  sel.innerHTML = `<option value="all">All time</option>` + months.slice().reverse().map(m => {
+    const [y, mo] = m.split('-').map(Number);
+    return `<option value="${m}">${new Date(Date.UTC(y, mo - 1, 15)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>`;
+  }).join('');
+  sel.addEventListener('change', () => { state.range = sel.value; render(); });
+  document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', () => { state.mode = b.dataset.mode; render(); }));
+  document.querySelectorAll('#precSeg button').forEach(b => b.addEventListener('click', () => { state.prec = +b.dataset.prec; render(); }));
+  document.querySelectorAll('#lineSeg button').forEach(b => b.addEventListener('click', () => { state.lines = !!+b.dataset.lines; render(); }));
+}
+
+function status(html) {
+  const el = document.getElementById('status');
+  el.innerHTML = html || '';
+  el.classList.toggle('show', !!html);
+}
+
+async function boot() {
+  map = L.map('map', { preferCanvas: true, zoomSnap: 0.5 }).setView(HOME, 7);
+  L.tileLayer(BASEMAP, { attribution: ATTRIB, maxZoom: 16 }).addTo(map);
+  graticule = L.layerGroup().addTo(map);
+  layer = L.layerGroup().addTo(map);
+  L.tileLayer(LABELS, { maxZoom: 16, pane: 'shadowPane' }).addTo(map);
+  labelLayer = L.layerGroup().addTo(map);
+  map.on('moveend', () => { updateLabels(); updateGraticule(); });
+
+  if (location.hash === '#coverage') state.mode = 'coverage';
+  status('Loading the archive&hellip;');
+  try {
+    await loadArchive();
+  } catch (e) {
+    status(location.protocol === 'file:'
+      ? 'Browsers will not load the archive from a local file.<br>Serve the folder instead, e.g. <code>python3 -m http.server</code>, then open <code>http://localhost:8000/coverage.html</code>.'
+      : 'Could not load <code>history/index.json</code>: ' + esc(e.message));
+    return;
+  }
+  status('');
+  buildControls();
+  render();
+}
+boot();
+</script>
+</body>
+</html>

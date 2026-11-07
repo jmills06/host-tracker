@@ -20,6 +20,7 @@ page that fetches files rather than revisions.
       2026-07.ndjson    one file per calendar month
       2026-08.ndjson
       ...
+      stations.json     where the relaying igates and digipeaters are
 
 ## Format
 
@@ -50,6 +51,23 @@ Two things to know when reading:
   but the hosts interleave. Sort by `time` yourself.
 - **Files are chosen by the point's own timestamp**, not by when it was written,
   so a late-arriving beacon lands in the month it actually happened.
+
+## stations.json
+
+The `path` names who relayed each beacon but not where they are. To draw
+coverage, `coverage.html` needs a location for each relay, so the poller looks
+up the callsigns it finds in the paths on aprs.fi, up to 40 per poll, and keeps
+them here:
+
+```json
+{"stations": {"CHLSEA": {"lat": 42.31, "lng": -84.02, "checked": 1794017109},
+              "NR8I-3": {"missing": true, "checked": 1794017109}}}
+```
+
+Positions are re-checked after 30 days. Callsigns aprs.fi has no position for
+(some igates never beacon one) are marked `missing` and retried after 7 days.
+Unlike the month files this one is rewritten, but it is only a cache: delete it
+and the poller rebuilds it within a few polls.
 
 ## Gotchas
 

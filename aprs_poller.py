@@ -24,6 +24,7 @@ Env:
   OUT_FILE      (optional)  output path, default host-tracker.json
   ARCHIVE_DIR   (optional)  append-only history, default history/
   PENDING_FILE  (optional)  this run's new points, default /tmp/aprs-pending.json
+  STATIONS_PENDING (optional) this run's relay lookups, default /tmp/aprs-stations-pending.json
 
 Usage:
   aprs_poller.py                   poll aprs.fi, rewrite the window, append history
@@ -34,12 +35,14 @@ another runner, so the loop resets onto the latest origin/main and rebuilds the
 commit; the live window is a snapshot and can just be copied back over, but the
 archive is append-only and a blind copy would drop whatever the other runner
 appended. Re-running the append instead merges: it is deduped on (call, time),
-so repeating it is free and nothing is ever clobbered.
+so repeating it is free and nothing is ever clobbered. It also merges this
+run's relay-station lookups into history/stations.json, for the same reason.
 """
 
 import datetime
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
@@ -51,6 +54,8 @@ API_KEY  = os.environ.get("APRS_API_KEY", "").strip()
 OUT_FILE = Path(os.environ.get("OUT_FILE", "host-tracker.json"))
 ARCHIVE_DIR  = Path(os.environ.get("ARCHIVE_DIR", "history"))
 PENDING_FILE = Path(os.environ.get("PENDING_FILE", "/tmp/aprs-pending.json"))
+STATIONS_PENDING = Path(os.environ.get("STATIONS_PENDING",
+                                       "/tmp/aprs-stations-pending.json"))
 
 # Fields aprs.fi hands back that the board has no use for but the archive keeps
 # anyway, because they cost nothing now and cannot be recovered later. `path`
@@ -253,8 +258,144 @@ def rebuild_index():
     return index
 
 
+# ---------------------------------------------------------------------------
+# Relay stations (for the coverage map)
+#
+# A beacon's `path` names who relayed it: the digipeaters that repeated it on
+# RF and the igate that finally put it on the internet. It names them, but it
+# does not say where they are, so coverage.html cannot draw "heard from here by
+# that" without a location for each. history/stations.json is that lookup: one
+# entry per relay callsign, filled a few at a time from aprs.fi.
+#
+# These are fixed stations, so a position is good for a long while. Entries are
+# re-checked after STATION_REFRESH_DAYS; callsigns aprs.fi has no position for
+# (some igates never beacon one) are remembered as missing and retried after
+# STATION_RETRY_DAYS, so they do not cost a query on every poll forever.
+# ---------------------------------------------------------------------------
+
+STATIONS_FILE = ARCHIVE_DIR / "stations.json"
+STATION_REFRESH_DAYS = 30
+STATION_RETRY_DAYS   = 7
+STATION_LOOKUPS_PER_RUN = 2 * BATCH   # two queries a poll, at most
+
+# Generic path aliases. A digi that only rewrites one of these without
+# inserting its own call leaves no name behind, so there is nothing to look up.
+ALIAS_RE = re.compile(r"^(WIDE|TRACE|RELAY|TEMP|ECHO|GATE|RFONLY|NOGATE)\d*(-\d+)?$")
+CALL_RE  = re.compile(r"^[A-Z0-9]{1,9}(-[A-Z0-9]{1,2})?$")
+
+
+def parse_path(path):
+    """Split an APRS-IS path into (digis used, igate, q construct).
+
+    Everything up to and including the last '*' was actually used; anything
+    after it was requested but never happened. The igate is whatever follows
+    the q construct. Keep this in step with parsePath() in coverage.html.
+    """
+    parts = [p.strip() for p in (path or "").split(",") if p.strip()]
+    qi = next((i for i, p in enumerate(parts) if p.startswith("qA")), -1)
+    pre = parts if qi < 0 else parts[:qi]
+    igate = parts[qi + 1] if 0 <= qi < len(parts) - 1 else None
+    last = max((i for i, p in enumerate(pre) if p.endswith("*")), default=-1)
+    digis = []
+    for p in pre[:last + 1]:
+        p = p.rstrip("*").upper()
+        if p and not ALIAS_RE.match(p) and p not in digis:
+            digis.append(p)
+    return digis, (igate.upper() if igate else None), (parts[qi] if qi >= 0 else None)
+
+
+def load_stations():
+    try:
+        return json.loads(STATIONS_FILE.read_text()).get("stations", {})
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def save_stations(stations):
+    STATIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    doc = {"updated": int(time.time()),
+           "format": "relay callsign -> {lat, lng, checked} or {missing, checked}",
+           "stations": dict(sorted(stations.items()))}
+    STATIONS_FILE.write_text(json.dumps(doc, indent=1) + "\n")
+
+
+def merge_stations(base, fresh):
+    """Fold fresh lookups into base; the more recently checked entry wins."""
+    for call, rec in fresh.items():
+        if rec.get("checked", 0) >= base.get(call, {}).get("checked", 0):
+            base[call] = rec
+    return base
+
+
+def relay_calls():
+    """Every relay callsign in the archive, most-used first."""
+    counts = defaultdict(int)
+    for path in sorted(ARCHIVE_DIR.glob("*.ndjson")):
+        for rec in read_month(path.stem):
+            digis, igate, _ = parse_path(rec.get("path"))
+            for call in digis + ([igate] if igate else []):
+                if CALL_RE.match(call):
+                    counts[call] += 1
+    return sorted(counts, key=lambda c: -counts[c])
+
+
+def resolve_stations():
+    """Look up a few relay stations aprs.fi has not told us about yet.
+
+    Returns the new entries (also written to STATIONS_PENDING for the retry
+    loop). Never fatal: a failed lookup just waits for the next poll.
+    """
+    now = int(time.time())
+    known = load_stations()
+
+    def due(call):
+        rec = known.get(call)
+        if not rec:
+            return True
+        age = now - rec.get("checked", 0)
+        limit = STATION_RETRY_DAYS if rec.get("missing") else STATION_REFRESH_DAYS
+        return age > limit * 86400
+
+    todo = [c for c in relay_calls() if due(c)][:STATION_LOOKUPS_PER_RUN]
+    fresh = {}
+    if todo:
+        try:
+            entries = fetch_all(todo)
+        except Exception as exc:  # noqa: BLE001
+            print(f"station lookup failed, will retry next poll: {exc}", file=sys.stderr)
+            return {}
+        found = {e.get("name", "").upper(): e for e in entries}
+        for call in todo:
+            e = found.get(call)
+            if e and e.get("lat") is not None and e.get("lng") is not None:
+                rec = {"lat": round(to_float(e["lat"]), 5),
+                       "lng": round(to_float(e["lng"]), 5),
+                       "checked": now}
+                if e.get("symbol"):
+                    rec["symbol"] = str(e["symbol"])[:4]
+                fresh[call] = rec
+            else:
+                fresh[call] = {"missing": True, "checked": now}
+        print(f"stations: looked up {len(todo)}, "
+              f"{sum(1 for r in fresh.values() if not r.get('missing'))} located")
+    try:
+        STATIONS_PENDING.write_text(json.dumps(fresh, separators=(",", ":")))
+    except Exception as exc:  # noqa: BLE001
+        print(f"could not write stations pending file: {exc}", file=sys.stderr)
+    if fresh:
+        save_stations(merge_stations(known, fresh))
+    return fresh
+
+
 def append_pending():
     """Re-apply this run's points onto whatever the tree now holds."""
+    if STATIONS_PENDING.exists():
+        try:
+            fresh = json.loads(STATIONS_PENDING.read_text())
+            if fresh:
+                save_stations(merge_stations(load_stations(), fresh))
+        except Exception as exc:  # noqa: BLE001
+            print(f"stations pending file unreadable: {exc}", file=sys.stderr)
     if not PENDING_FILE.exists():
         print("no pending file; nothing to append")
         return
@@ -368,6 +509,8 @@ def main():
         tot = index["totals"]
         print(f"archive: {written} new -> {tot['points']} points "
               f"across {len(index['months'])} month(s)")
+
+    resolve_stations()
 
 
 if __name__ == "__main__":
