@@ -370,3 +370,5 @@
 {"call":"W8KNX","time":1794685511,"lat":42.4965,"lng":-83.5425,"speed":24.1,"course":270,"ssid":"W8KNX-9","alt":304.0,"path":"qAR,CHLSEA","symbol":"/j"}
 {"call":"N8JRD","time":1794685555,"lat":42.515,"lng":-83.611,"speed":0.0,"course":249,"ssid":"N8JRD-3","alt":287.0,"path":"WIDE1-1,qAR,CHLSEA","comment":"147.040MHz C110 +060 Jim D - MachE EV","symbol":"/v"}
 {"call":"K8JKU","time":1794685806,"lat":42.71933,"lng":-83.4365,"speed":24.1,"course":239,"ssid":"K8JKU-9","alt":304.0,"path":"WIDE1-1,WIDE2-1,qAR,CHLSEA","comment":"everydayham.com","symbol":"/j"}
+{"call":"W8KNX","time":1794686114,"lat":42.48883,"lng":-83.65317,"speed":83.3,"course":177,"ssid":"W8KNX-9","alt":266.0,"path":"qAR,N8JRD","symbol":"/j"}
+{"call":"N8JRD","time":1794686409,"lat":42.51533,"lng":-83.611,"speed":14.8,"course":347,"ssid":"N8JRD-3","alt":285.0,"path":"WIDE1-1,WIDE2-1,qAR,CHLSEA","comment":"147.040MHz C110 +060 Jim D - MachE EV","symbol":"/v"}
