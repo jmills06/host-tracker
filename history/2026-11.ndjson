@@ -353,3 +353,5 @@
 {"call":"K8JKU","time":1794683692,"lat":42.46883,"lng":-83.75583,"speed":77.8,"course":355,"ssid":"K8JKU-9","alt":263.0,"path":"WIDE1-1,WIDE2-1,qAR,CHLSEA","comment":"everydayham.com","symbol":"/j"}
 {"call":"W8KNX","time":1794683726,"lat":42.49683,"lng":-83.54117,"speed":0.0,"course":292,"ssid":"W8KNX-9","alt":294.0,"path":"WIDE1-1,WIDE2-2,qAR,CHLSEA","symbol":"/j"}
 {"call":"K8JKU","time":1794683978,"lat":42.554,"lng":-83.74617,"speed":122.2,"course":36,"ssid":"K8JKU-9","alt":287.0,"path":"WIDE1-1,WIDE2-1,qAR,CHLSEA","comment":"everydayham.com","symbol":"/j"}
+{"call":"K8JKU","time":1794684010,"lat":42.56283,"lng":-83.74,"speed":124.1,"course":1,"ssid":"K8JKU-9","alt":281.0,"path":"WIDE1-1,WIDE2-1,qAR,CHLSEA","comment":"everydayham.com","symbol":"/j"}
+{"call":"W8KNX","time":1794684026,"lat":42.49683,"lng":-83.54133,"speed":0.0,"course":23,"ssid":"W8KNX-9","alt":295.0,"path":"WIDE1-1,WIDE2-2,qAR,KB8JIU","symbol":"/j"}
