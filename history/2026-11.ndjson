@@ -456,3 +456,5 @@
 {"call":"K8JKU","time":1794944117,"lat":42.71933,"lng":-83.43633,"speed":20.4,"course":260,"ssid":"K8JKU-9","alt":312.0,"path":"WIDE1-1,WIDE2-1,qAR,K8DTX","comment":"everydayham.com","symbol":"/j"}
 {"call":"W8KNX","time":1794954584,"lat":42.53267,"lng":-83.7565,"speed":63.0,"course":208,"ssid":"W8KNX-9","alt":282.0,"path":"qAR,W8MCV-10","symbol":"/j"}
 {"call":"W8KNX","time":1794954677,"lat":42.521,"lng":-83.75917,"speed":13.0,"course":173,"ssid":"W8KNX-9","alt":305.0,"path":"WIDE1-1,qAR,W8MCV-10","symbol":"/j"}
+{"call":"W8KNX","time":1794955074,"lat":42.49583,"lng":-83.6885,"speed":16.7,"course":146,"ssid":"W8KNX-9","alt":339.0,"path":"WIDE1-1,WIDE2-2,qAR,N8JRD","symbol":"/j"}
+{"call":"N8JRD","time":1794955205,"lat":42.44567,"lng":-83.65167,"speed":0.0,"course":35,"ssid":"N8JRD-3","alt":293.0,"path":"WIDE1-1,WIDE2-1,qAR,N8JRD","comment":"147.040MHz C110 +060 Jim D - MachE EV","symbol":"/v"}
