@@ -1,5 +1,5 @@
 {
- "updated": 1794918916,
+ "updated": 1794919211,
  "format": "ndjson; one record per beacon; sort by time when reading",
  "months": [
   {
