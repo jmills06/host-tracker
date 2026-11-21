@@ -591,3 +591,4 @@
 {"call":"W8KNX","time":1795279505,"lat":42.49733,"lng":-83.53567,"speed":11.1,"course":4,"ssid":"W8KNX-9","alt":326.0,"path":"qAR,N8QYQ-1","symbol":"/j"}
 {"call":"W8KNX","time":1795279585,"lat":42.502,"lng":-83.53633,"speed":20.4,"course":356,"ssid":"W8KNX-9","alt":303.0,"path":"WIDE1-1,WIDE2-2,qAR,N8QYQ-1","symbol":"/j"}
 {"call":"W8KNX","time":1795279886,"lat":42.51017,"lng":-83.536,"speed":0.0,"course":199,"ssid":"W8KNX-9","alt":315.0,"path":"qAR,N8JRD","symbol":"/j"}
+{"call":"W8KNX","time":1795280488,"lat":42.51017,"lng":-83.536,"speed":0.0,"course":354,"ssid":"W8KNX-9","alt":317.0,"path":"WIDE1-1,qAR,N8JRD","symbol":"/j"}
