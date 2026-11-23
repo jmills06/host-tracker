@@ -728,3 +728,4 @@
 {"call":"N8JRD","time":1795462573,"lat":42.4845,"lng":-83.447,"speed":103.7,"course":275,"ssid":"N8JRD-3","alt":259.0,"path":"WIDE1-1,qAR,AE8SP-10","comment":"147.040MHz C110 +060 Jim D - MachE EV","symbol":"/v"}
 {"call":"N8JRD","time":1795463058,"lat":42.52067,"lng":-83.616,"speed":7.4,"course":130,"ssid":"N8JRD-3","alt":290.0,"path":"WIDE1-1,WIDE2-1,qAR,N8JRD","comment":"147.040MHz C110 +060 Jim D - MachE EV","symbol":"/v"}
 {"call":"N8JRD","time":1795463154,"lat":42.515,"lng":-83.61683,"speed":50.0,"course":267,"ssid":"N8JRD-3","alt":295.0,"path":"qAR,N8JRD","comment":"147.040MHz C110 +060 Jim D - MachE EV","symbol":"/v"}
+{"call":"N8JRD","time":1795463455,"lat":42.51667,"lng":-83.63717,"speed":0.0,"course":146,"ssid":"N8JRD-3","alt":308.0,"path":"WIDE1-1,WIDE2-1,qAR,N8JRD","comment":"147.040MHz C110 +060 Jim D - MachE EV","symbol":"/v"}
