@@ -1,5 +1,5 @@
 {
- "updated": 1795653914,
+ "updated": 1795654213,
  "format": "ndjson; one record per beacon; sort by time when reading",
  "months": [
   {
@@ -48,24 +48,24 @@
   },
   {
    "month": "2026-11",
-   "points": 782,
+   "points": 783,
    "first": 1793494264,
-   "last": 1795653753,
+   "last": 1795654054,
    "hosts": {
     "K8JKU": 182,
     "N8JRD": 306,
-    "W8KNX": 294
+    "W8KNX": 295
    }
   }
  ],
  "totals": {
-  "points": 4323,
+  "points": 4324,
   "hosts": {
    "K8JKU": 604,
    "N8JRD": 1484,
-   "W8KNX": 2235
+   "W8KNX": 2236
   },
   "first": 1782866807,
-  "last": 1795653753
+  "last": 1795654054
  }
 }
